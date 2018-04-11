@@ -1,0 +1,82 @@
+name:                localcooking-template
+version:             0.1.0.0
+github:              "githubuser/localcooking-template"
+license:             BSD3
+author:              "Athan Clark"
+maintainer:          "athan.clark@localcooking.com"
+copyright:           "Copyright (c) 2018 Local Cooking Inc."
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/localcooking-template#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- localcooking-shared
+- localcooking-db
+- localcooking-fb
+- aeson
+- async
+- attoparsec
+- attoparsec-path
+- attoparsec-uri
+- base16-bytestring
+- bytestring
+- data-default
+- directory
+- heredoc
+- http-client
+- http-client-tls
+- http-types
+- logging
+- lucid
+- markup
+- mmorph
+- monad-logger
+- mtl
+- nested-routes >= 9.0.0.1
+- optparse-applicative
+- path
+- path-extra >= 0.1.0
+- persistent
+- persistent-postgresql
+- QuickCheck
+- quickcheck-instances
+- resource-pool
+- safe-exceptions
+- saltine
+- shakespeare
+- stm
+- strict
+- text
+- timemap >= 0.0.7
+- tmapmvar
+- unordered-containers
+- urlpath >= 8.0.1
+- utf8-string
+- wai-middleware-content-type >= 0.6.1.1
+- webpage
+
+
+library:
+  source-dirs: src
+
+tests:
+  localcooking-template-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - localcooking-template
