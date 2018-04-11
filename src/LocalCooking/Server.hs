@@ -41,8 +41,7 @@ import qualified Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
 
 
 data LocalCookingArgs siteLinks sec = LocalCookingArgs
-  { localCookingArgsPort        :: Int
-  , localCookingArgsFrontend    :: BS.ByteString
+  { localCookingArgsFrontend    :: BS.ByteString
   , localCookingArgsFrontendMin :: BS.ByteString
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)]
   , localCookingArgsHTTP        :: MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()
@@ -55,9 +54,10 @@ server :: forall sec siteLinks
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
        => ToLocation siteLinks
-       => LocalCookingArgs siteLinks sec
+       => Int
+       -> LocalCookingArgs siteLinks sec
        -> AppM ()
-server LocalCookingArgs{..} = do
+server port LocalCookingArgs{..} = do
   -- auth token expiring checker - FIXME use a cassandra database instead probably
   env@Env{envAuthTokens,envAuthTokenExpire} <- ask
   liftIO $ void $ async $ forever $ do
@@ -87,7 +87,7 @@ server LocalCookingArgs{..} = do
         localCookingArgsHTTP
         dependencies
         defApp
-    runEnv localCookingArgsPort server'
+    runEnv port server'
 
 
 defApp :: ApplicationT AppM
