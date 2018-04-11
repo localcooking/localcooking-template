@@ -132,16 +132,16 @@ masterPage LocalCookingColors{..} mToken =
   where
     inlineStyles = [lucius|
 a:not([role="button"]), a:link:not([role="button"]), a:active:not([role="button"]) {
-  color: #{localCookingColorActive};
+  color: #{localCookingColorsActive};
 }
 a:hover:not([role="button"]) {
-  color: #{localCookingColorHover};
+  color: #{localCookingColorsHover};
 }
 a:visited:not([role="button"]) {
-  color: #{localCookingColorMain};
+  color: #{localCookingColorsMain};
 }
 body {
-  background-color: #{localCookingColorMain} !important;
+  background-color: #{localCookingColorsMain} !important;
   padding-bottom: 5em;
 }|]
 
