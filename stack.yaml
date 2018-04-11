@@ -48,14 +48,19 @@ packages:
 extra-deps:
 - aeson-attoparsec-0.0.0
 - attoparsec-base64-0.0.0
+- chan-0.0.3
 - logging-3.0.5
+- markup-4.2.0
 - nested-routes-9.0.0.1
-- path-extra-0.1.0
+- path-extra-0.2.0
 - pred-trie-0.6.0.1
+- sparrow-0.0.1.4
 - timemap-0.0.7
-- wai-middleware-content-type-0.6.1.1
+- urlpath-9.0.0
+- wai-middleware-content-type-0.6.1.2
 - wai-middleware-verbs-0.4.0.1
 - wai-transformers-0.1.0
+- websockets-simple-0.1.2.1
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

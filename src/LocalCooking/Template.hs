@@ -52,7 +52,8 @@ import           Control.Monad.Reader                     (ask)
 import           Control.Monad.State                      (modify)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Morph                      (hoist)
-import           Path.Extended (ToPath (..), ToLocation (..), Abs, File, fromPath, setFileExt, addQuery, parseAbsFile, parseAbsDir, absfile)
+import           Path (Abs, File, parseAbsFile, parseAbsDir, absfile)
+import           Path.Extended (ToPath (..), ToLocation (..), fromAbsFile, addQuery)
 import           Text.Julius (julius, renderJavascriptUrl)
 import           Text.Lucius (lucius, renderCssUrl, Color (..))
 import           Crypto.Saltine.Core.Box (Nonce)
@@ -135,7 +136,7 @@ masterPage mToken =
         }
   where
     inlineStyles = [lucius|
-a:link:not([role="button"]), a:active:not([role="button"]) {
+a:not([role="button"]), a:link:not([role="button"]), a:active:not([role="button"]) {
   color: #{aLinkActive};
 }
 a:hover:not([role="button"]) {
@@ -180,17 +181,14 @@ data WebAssetLinks
 
 instance ToPath WebAssetLinks Abs File where
   toPath x = case x of
-    IndexCss  -> [absfile|/index|]
-    IndexJs _ -> [absfile|/index|]
+    IndexCss  -> [absfile|/index.css|]
+    IndexJs _ -> [absfile|/index.js|]
 
-instance ToLocation WebAssetLinks Abs File where
+instance ToLocation WebAssetLinks where
   toLocation x = case x of
-    IndexCss -> setFileExt (Just "css") $ fromPath $ toPath x
+    IndexCss -> fromAbsFile (toPath x)
     IndexJs mNonce ->
-        setFileExt (Just "js")
-      $ ( case mNonce of
-            Nothing -> id
-            Just nonce -> addQuery ("cache_buster", Just $ BS8.toString $ BS16.encode $ NaCl.encode nonce)
-        )
-      $ fromPath
-      $ toPath x
+      let y = fromAbsFile (toPath x)
+      in  case mNonce of
+            Nothing -> y
+            Just nonce -> addQuery ("cache_buster", Just $ BS8.toString $ BS16.encode $ NaCl.encode nonce) y

@@ -25,28 +25,34 @@ dependencies:
 - localcooking-db
 - localcooking-fb
 - aeson
+- aeson-attoparsec
 - async
 - attoparsec
 - attoparsec-path
 - attoparsec-uri
 - base16-bytestring
+- base64-bytestring
 - bytestring
+- chan
 - data-default
 - directory
+- emailaddress
+- extractable-singleton
 - heredoc
 - http-client
 - http-client-tls
 - http-types
 - logging
 - lucid
-- markup
+- markup >= 4.2.0
 - mmorph
+- monad-control-aligned
 - monad-logger
 - mtl
 - nested-routes >= 9.0.0.1
 - optparse-applicative
 - path
-- path-extra >= 0.1.0
+- path-extra >= 0.2.0
 - persistent
 - persistent-postgresql
 - QuickCheck
@@ -55,16 +61,24 @@ dependencies:
 - safe-exceptions
 - saltine
 - shakespeare
+- smtp-mail
+- sparrow >= 0.0.1.4
 - stm
 - strict
 - text
+- time
 - timemap >= 0.0.7
+- tmapchan >= 0.0.3
 - tmapmvar
 - unordered-containers
-- urlpath >= 8.0.1
+- urlpath >= 9.0.0
 - utf8-string
-- wai-middleware-content-type >= 0.6.1.1
+- wai
+- wai-middleware-content-type >= 0.6.1.2
+- wai-transformers >= 0.1.0
+- warp
 - webpage
+- websockets
 
 
 library:
