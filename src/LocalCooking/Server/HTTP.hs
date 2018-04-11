@@ -3,7 +3,6 @@
   , OverloadedLists
   , NamedFieldPuns
   , ScopedTypeVariables
-  , RecordWildCards
   , DataKinds
   , QuasiQuotes
   #-}
@@ -11,76 +10,56 @@
 module LocalCooking.Server.HTTP where
 
 import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInFacebookCode), AuthTokenInitOut (AuthTokenInitOutSuccess))
-import LocalCooking.Types (AppM, runAppM, HTTPException (..))
-import LocalCooking.Types.Env (Env (..), Managers (..), isDevelopment, Development (..))
-import LocalCooking.Types.FrontendEnv (FrontendEnv (..))
-import LocalCooking.Types.Keys (Keys (..))
+import LocalCooking.Types (AppM)
+import LocalCooking.Types.Env (Env (..), Development (..))
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink))
 import LocalCooking.Auth.Error (AuthError (..), PreliminaryAuthToken (..))
 import LocalCooking.Common.AuthToken (AuthToken)
+import LocalCooking.Colors (LocalCookingColors)
 import Facebook.Types (FacebookLoginCode (..))
 import Facebook.State (FacebookLoginState (..))
 
-import Web.Routes.Nested (RouterT, match, matchHere, matchGroup, matchAny, action, post, get, json, text, textOnly, l_, (</>), o_, route)
+import Web.Routes.Nested (RouterT, match, matchHere, matchAny, action, post, get, text, textOnly, l_, (</>), o_, route)
 import Web.Dependencies.Sparrow.Types (ServerContinue (ServerContinue, serverContinue), ServerReturn (ServerReturn, serverInitOut))
 import Network.Wai (strictRequestBody, queryString)
 import Network.Wai.Middleware.ContentType (bytestring, FileExt (Other, JavaScript))
 import Network.Wai.Trans (MiddlewareT)
-import Network.WebSockets (defaultConnectionOptions)
-import Network.WebSockets.Trans (websocketsOrT)
 import Network.HTTP.Types (status302)
-import Network.HTTP.Client (httpLbs, responseBody, parseRequest)
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
 import qualified Data.ByteString           as BS
-import qualified Data.ByteString.Base64    as BS64
 import qualified Data.ByteString.Base16    as BS16
 import qualified Data.ByteString.Lazy      as LBS
 import qualified Data.ByteString.Lazy.UTF8 as LBS8
 import Data.URI (URI (..), printURI)
 import Data.Url (packLocation)
-import Data.Aeson (FromJSON (..), (.:))
-import Data.Aeson.Types (typeMismatch, Value (String, Object))
 import qualified Data.Aeson as Aeson
-import Data.TimeMap (TimeMap)
-import qualified Data.TimeMap as TimeMap
-import Data.TimeMap.Multi (TimeMultiMap)
-import qualified Data.TimeMap.Multi as TimeMultiMap
-import qualified Data.Attoparsec.Text as Atto
 import Data.Proxy (Proxy (..))
 import Data.Monoid ((<>))
 import qualified Data.Strict.Maybe as Strict
-import Data.Strict.Tuple (Pair (..))
 import Path.Extended ((<&>), ToLocation (..), FromLocation)
 import Text.Heredoc (here)
 import Control.Applicative ((<|>))
-import Control.Monad (join, when, forM_)
+import Control.Monad (join, forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans (lift)
-import Control.Exception.Safe (throwM)
-import Control.Logging (log', warn')
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TMapChan (TMapChan, newTMapChan)
-import qualified Control.Concurrent.STM.TMapChan as TMapChan
-import Control.Concurrent.Chan.Scope (Scope (..))
-import Control.Concurrent.STM.TChan.Typed (TChanRW)
-import Crypto.Saltine.Core.Box (newNonce)
+import Control.Logging (log')
 import qualified Crypto.Saltine.Class as NaCl
-import System.IO.Error (userError)
 
 
-handleAuthToken :: MiddlewareT AppM
-handleAuthToken app req resp =
+handleAuthToken :: LocalCookingColors
+                -> MiddlewareT AppM
+handleAuthToken colors app req resp =
   case join $ lookup "authToken" $ queryString req of
-    Nothing -> do
-      (action $ get $ html Nothing "") app req resp
+    Nothing ->
+      (action $ get $ html colors Nothing "") app req resp
     Just json -> case Aeson.decode $ LBS.fromStrict json of
-      Nothing -> do
-        (action $ get $ html Nothing "") app req resp
-      Just x@(PreliminaryAuthToken mEToken) -> do
-        (action $ get $ html mEToken "") app req resp
+      Nothing ->
+        (action $ get $ html colors Nothing "") app req resp
+      Just (PreliminaryAuthToken mEToken) ->
+        (action $ get $ html colors mEToken "") app req resp
 
 
 
@@ -91,6 +70,7 @@ router :: forall siteLinks sec
        => BS.ByteString -- ^ Unminified
        -> BS.ByteString -- ^ Minified
        -> [(FilePath, BS.ByteString)] -- ^ Favicons
+       -> LocalCookingColors
        -> Proxy siteLinks
        -> (MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ())
        -> RouterT (MiddlewareT AppM) sec AppM ()
@@ -98,17 +78,20 @@ router
   frontend
   frontendMin
   favicons
+  colors
   Proxy
   handles
   = do
   Env{envHostname,envTls} <- lift ask
 
+  let handleAuthToken' = handleAuthToken colors
+
   -- main routes
-  matchHere handleAuthToken
-  match (l_ "about" </> o_) handleAuthToken
-  match (l_ "register" </> o_) handleAuthToken
-  handles handleAuthToken
-  matchAny $ \app req resp -> do
+  matchHere handleAuthToken'
+  match (l_ "about" </> o_) handleAuthToken'
+  match (l_ "register" </> o_) handleAuthToken'
+  handles handleAuthToken'
+  matchAny $ \_ _ resp -> do
     let redirectUri = URI (Strict.Just $ if envTls then "https" else "http")
                           True
                           envHostname
@@ -143,7 +126,7 @@ Disallow: /facebookLoginDeauthorize
     mid app req resp
 
   -- TODO handle authenticated linking
-  match (l_ "facebookLoginReturn" </> o_) $ \app req resp -> do
+  match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do
     let qs = queryString req
     ( eToken :: Either AuthError AuthToken
       , mFbState :: Maybe (FacebookLoginState siteLinks)
@@ -211,11 +194,12 @@ httpServer :: LocalCookingSiteLinks siteLinks
            => BS.ByteString -- ^ Unminified
            -> BS.ByteString -- ^ Minified
            -> [(FilePath, BS.ByteString)] -- ^ Favicons
+           -> LocalCookingColors
            -> Proxy siteLinks
            -> (MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ HTTP handlers
            -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Dependencies
            -> MiddlewareT AppM
-httpServer frontend frontendEnv favicons siteLinks handlers dependencies = \app req resp -> do
-  route ( do dependencies
-             router frontend frontendEnv favicons siteLinks handlers
-        ) app req resp
+httpServer frontend frontendEnv favicons colors siteLinks handlers dependencies =
+  route $ do
+    dependencies
+    router frontend frontendEnv favicons colors siteLinks handlers

@@ -1,6 +1,6 @@
 name:                localcooking-template
-version:             0.1.0.0
-github:              "githubuser/localcooking-template"
+version:             0.0.0
+git:                 "git@git.localcooking.com/localcooking/localcooking-template.git"
 license:             BSD3
 author:              "Athan Clark"
 maintainer:          "athan.clark@localcooking.com"
@@ -19,6 +19,9 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/githubuser/localcooking-template#readme>
 
+ghc-options:
+  - -Wall
+
 dependencies:
 - base >= 4.7 && < 5
 - localcooking-shared
@@ -31,9 +34,7 @@ dependencies:
 - attoparsec-path
 - attoparsec-uri
 - base16-bytestring
-- base64-bytestring
 - bytestring
-- chan
 - data-default
 - directory
 - emailaddress
@@ -45,7 +46,6 @@ dependencies:
 - logging
 - lucid
 - markup >= 4.2.0
-- mmorph
 - monad-control-aligned
 - monad-logger
 - mtl
@@ -68,7 +68,6 @@ dependencies:
 - text
 - time
 - timemap >= 0.0.7
-- tmapchan >= 0.0.3
 - tmapmvar
 - unordered-containers
 - urlpath >= 9.0.0
@@ -78,19 +77,7 @@ dependencies:
 - wai-transformers >= 0.1.0
 - warp
 - webpage
-- websockets
 
 
 library:
   source-dirs: src
-
-tests:
-  localcooking-template-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - localcooking-template

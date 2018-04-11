@@ -5,9 +5,8 @@
 
 module LocalCooking.Types.FrontendEnv where
 
-import LocalCooking.Common.AuthToken (AuthToken)
 import LocalCooking.Common.Password (HashedPassword)
-import LocalCooking.Auth.Error (AuthError, PreliminaryAuthToken)
+import LocalCooking.Auth.Error (PreliminaryAuthToken)
 import Facebook.App (FacebookClientId)
 import Google.ReCaptcha (ReCaptchaSiteKey)
 

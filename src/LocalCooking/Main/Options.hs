@@ -1,7 +1,6 @@
 {-# LANGUAGE
     NamedFieldPuns
   , OverloadedLists
-  , QuasiQuotes
   , OverloadedStrings
   #-}
 
@@ -25,14 +24,13 @@ import Data.Monoid ((<>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Strict.Maybe as Strict
 import Data.TimeMap (newTimeMap)
-import Control.Monad (unless, void)
-import Control.Concurrent.STM (newTVar, atomically)
+import Control.Monad (unless)
+import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMapMVar.Hash (newTMapMVar)
 import Control.Logging (errorL)
 import Control.Monad.Logger (runStderrLoggingT)
-import Path (toFilePath, parent, relfile, (</>))
+import Path (toFilePath, parent)
 import System.Directory (doesDirectoryExist, createDirectory)
-import Foreign.C.Types (CTime (..))
 import Database.Persist.Sql (runSqlPool, runMigration)
 import Database.Persist.Postgresql (createPostgresqlPool)
 

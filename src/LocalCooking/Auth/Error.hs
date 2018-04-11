@@ -11,7 +11,6 @@ import LocalCooking.Common.AuthToken (AuthToken)
 import Data.Aeson (ToJSON (..), FromJSON (..), (.:), (.=), object, Value (String, Object, Null))
 import Data.Aeson.Types (typeMismatch)
 import Data.Text (Text)
-import qualified Data.Text.Encoding as T
 import Control.Applicative ((<|>))
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary (..), oneof)

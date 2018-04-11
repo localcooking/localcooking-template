@@ -12,19 +12,12 @@ import LocalCooking.Common.AuthToken (AuthToken)
 import LocalCooking.Database.Schema.User (UserId)
 
 import Data.TimeMap (TimeMap, newTimeMap)
-import qualified Data.TimeMap as TimeMap
-import Data.Word (Word64)
-import Data.Text (Text)
-import qualified Data.Text.Encoding as T
 import Data.URI.Auth (URIAuth (..))
 import Data.URI.Auth.Host (URIAuthHost (..))
 import Data.Default (Default (..))
 import qualified Data.Strict.Maybe as Strict
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap
 import Data.Pool (destroyAllResources)
-import Control.Concurrent.Async (Async, cancel)
-import Control.Concurrent.STM (TVar, newTVar, atomically)
+import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMapMVar.Hash (TMapMVar, newTMapMVar)
 import Crypto.Saltine.Core.Box (Nonce, newNonce)
 import System.IO.Unsafe (unsafePerformIO)

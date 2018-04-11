@@ -11,9 +11,6 @@ module Facebook.State where
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.=), (.:), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
 import Data.Aeson.Attoparsec (attoAeson)
-import qualified Data.Text as T
-import Control.Applicative ((<|>))
-import Path (Abs, File, Dir)
 import Path.Extended (ToLocation (toLocation), FromLocation (parseLocation), locationParser, printLocation)
 
 

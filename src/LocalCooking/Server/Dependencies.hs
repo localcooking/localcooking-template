@@ -9,7 +9,7 @@ import LocalCooking.Server.Dependencies.Register (registerServer)
 import LocalCooking.Types (AppM)
 
 import Web.Routes.Nested (RouterT, l_, o_, (</>))
-import Web.Dependencies.Sparrow (Topic (..), Server, serveDependencies, unpackServer, SparrowServerT, match, matchGroup)
+import Web.Dependencies.Sparrow (Topic (..), serveDependencies, unpackServer, SparrowServerT, match)
 import Network.Wai.Trans (MiddlewareT)
 
 

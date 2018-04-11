@@ -27,10 +27,10 @@ import qualified Data.Text.Encoding as T
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (ask)
 import Control.Logging (log')
-import Network.HTTP.Client (httpLbs, responseBody, parseRequest, method, urlEncodedBody, RequestBody (RequestBodyLBS))
+import Network.HTTP.Client (httpLbs, responseBody, parseRequest, method, urlEncodedBody)
 import Network.Mail.SMTP (sendMail, simpleMail, htmlPart, Address (..))
 
-import Web.Dependencies.Sparrow.Types (Server, ServerContinue (..), ServerReturn (..), staticServer, JSONVoid)
+import Web.Dependencies.Sparrow.Types (Server, staticServer, JSONVoid)
 import Lucid (renderTextT)
 import qualified Lucid.Html5 as L
 

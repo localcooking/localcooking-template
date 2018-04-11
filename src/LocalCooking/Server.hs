@@ -2,7 +2,6 @@
     OverloadedStrings
   , NamedFieldPuns
   , ScopedTypeVariables
-  , QuasiQuotes
   , DataKinds
   , RankNTypes
   , RecordWildCards
@@ -15,6 +14,7 @@ import LocalCooking.Server.Dependencies (servedDependencies)
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
+import LocalCooking.Colors (LocalCookingColors)
 
 import Web.Routes.Nested (RouterT, textOnly)
 import Web.Dependencies.Sparrow (SparrowServerT)
@@ -26,10 +26,8 @@ import Data.Time.Clock (secondsToDiffTime)
 import qualified Data.TimeMap as TimeMap
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
 import Data.Monoid ((<>))
 import Data.Proxy (Proxy (..))
-import Text.Lucius (Color)
 import Path.Extended (FromLocation, ToLocation)
 import Control.Monad (void, forM_, forever)
 import Control.Monad.Reader (ask)
@@ -42,21 +40,14 @@ import Control.Concurrent.STM (atomically)
 import qualified Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
 
 
-data LocalCookingColors = LocalCookingColors
-  { localCookingColorMain   :: Color
-  , localCookingColorHover  :: Color
-  , localCookingColorActive :: Color
-  }
-
-
 data LocalCookingArgs siteLinks sec = LocalCookingArgs
-  { localCookingArgsPort           :: Int
-  , localCookingArgsFrontend       :: BS.ByteString
-  , localCookingArgsFrontendMin    :: BS.ByteString
-  , localCookingArgsFavicons       :: [(FilePath, BS.ByteString)]
-  , localCookingArgsHTTP           :: MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()
-  , localCookingArgsDeps           :: SparrowServerT (MiddlewareT AppM) AppM ()
-  , localCookingColors             :: LocalCookingColors
+  { localCookingArgsPort        :: Int
+  , localCookingArgsFrontend    :: BS.ByteString
+  , localCookingArgsFrontendMin :: BS.ByteString
+  , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)]
+  , localCookingArgsHTTP        :: MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()
+  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) AppM ()
+  , localCookingArgsColors      :: LocalCookingColors
   }
 
 
@@ -91,6 +82,7 @@ server LocalCookingArgs{..} = do
         localCookingArgsFrontend
         localCookingArgsFrontendMin
         localCookingArgsFavicons
+        localCookingArgsColors
         (Proxy :: Proxy siteLinks)
         localCookingArgsHTTP
         dependencies

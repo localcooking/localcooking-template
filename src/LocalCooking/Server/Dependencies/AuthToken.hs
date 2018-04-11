@@ -8,7 +8,7 @@ module LocalCooking.Server.Dependencies.AuthToken where
 
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Keys (Keys (..))
-import LocalCooking.Types.Env (Env (..), Managers (..), isDevelopment)
+import LocalCooking.Types.Env (Env (..), Managers (..))
 import LocalCooking.Auth (loginAuth, logoutAuth, usersAuthToken)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AuthToken (AuthToken)
@@ -18,28 +18,16 @@ import Facebook.Types (FacebookLoginCode)
 import Facebook.Return (handleFacebookLoginReturn)
 
 import Web.Dependencies.Sparrow (Server, ServerContinue (..), ServerReturn (..), ServerArgs (..))
-import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), (.:), Value (..))
-import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (typeMismatch)
-import qualified Data.Strict.Maybe as Strict
-import Data.Strict.Tuple (Pair (..))
-import Data.Monoid ((<>))
-import Data.URI (URI (..), printURI)
 import Data.Singleton.Class (Extractable (runSingleton))
 import Control.Applicative ((<|>))
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import qualified Control.Monad.Trans.Control.Aligned as Aligned
-import Control.Exception.Safe (throwM)
-import Control.Logging (log', warn')
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
-import Network.HTTP.Types.URI (Query)
-import Network.HTTP.Client (httpLbs, responseBody, parseRequest)
 
 
 

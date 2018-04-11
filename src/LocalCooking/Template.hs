@@ -6,6 +6,7 @@
   , QuasiQuotes
   , StandaloneDeriving
   , MultiParamTypeClasses
+  , RecordWildCards
   #-}
 
 module LocalCooking.Template where
@@ -15,6 +16,7 @@ import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopme
 import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
 import           LocalCooking.Types.Keys (Keys (..))
 import           LocalCooking.Auth.Error (AuthError, PreliminaryAuthToken (..))
+import           LocalCooking.Colors (LocalCookingColors (..))
 import           Facebook.App (Credentials (..))
 import           Google.Keys (GoogleCredentials (..))
 import           Google.Analytics (googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..))
@@ -29,8 +31,6 @@ import           Web.Page.Lucid (template, WebPage (..))
 import           Web.Routes.Nested (FileExtListenerT, mapHeaders, mapStatus, bytestring)
 
 import qualified Data.Text                                as T
-import qualified Data.Text.Encoding                       as T
-import qualified Data.Text.Lazy.Encoding                  as LT
 import           Data.Default
 import qualified Data.HashMap.Strict                      as HM
 import           Data.Markup                              as M
@@ -38,24 +38,17 @@ import           Data.Url (AbsoluteUrlT (..), packLocation)
 import           Data.URI (URI (..), printURI)
 import           Data.URI.Auth (URIAuth (..))
 import           Data.URI.Auth.Host (URIAuthHost (..))
-import           Data.Aeson (ToJSON (..), (.=), object)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString                          as BS
 import qualified Data.ByteString.Base16                   as BS16
 import qualified Data.ByteString.UTF8                     as BS8
-import qualified Data.ByteString.Lazy                     as LBS
 import qualified Data.Strict.Maybe                        as Strict
-import           Data.Monoid ((<>))
-import           Text.Heredoc (here)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Reader                     (ask)
 import           Control.Monad.State                      (modify)
-import           Control.Monad.Trans                      (lift)
-import           Control.Monad.Morph                      (hoist)
-import           Path (Abs, File, parseAbsFile, parseAbsDir, absfile)
+import           Path (Abs, File, absfile)
 import           Path.Extended (ToPath (..), ToLocation (..), fromAbsFile, addQuery)
 import           Text.Julius (julius, renderJavascriptUrl)
-import           Text.Lucius (lucius, renderCssUrl, Color (..))
+import           Text.Lucius (lucius, renderCssUrl)
 import           Crypto.Saltine.Core.Box (Nonce)
 import qualified Crypto.Saltine.Class                     as NaCl
 
@@ -71,7 +64,7 @@ htmlLight :: Status
 htmlLight s content = do
   bs <- lift $ do
     Env{envHostname,envTls} <- ask
-    let locationToURI loc = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname loc
+    let locationToURI = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname
     runAbsoluteUrlT (renderBST content) locationToURI
 
   bytestring CT.Html bs
@@ -79,15 +72,17 @@ htmlLight s content = do
                   . mapHeaders ([("content-Type", "text/html")] ++)
 
 
-html :: Maybe (Either AuthError AuthToken)
+html :: LocalCookingColors
+     -> Maybe (Either AuthError AuthToken)
      -> HtmlT (AbsoluteUrlT AppM) ()
      -> FileExtListenerT AppM ()
-html mToken = htmlLight status200 . mainTemplate mToken
+html colors mToken = htmlLight status200 . mainTemplate colors mToken
 
 
-masterPage :: Maybe (Either AuthError AuthToken)
+masterPage :: LocalCookingColors
+           -> Maybe (Either AuthError AuthToken)
            -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
-masterPage mToken =
+masterPage LocalCookingColors{..} mToken =
   let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
       page = def
   in  page
@@ -137,23 +132,18 @@ masterPage mToken =
   where
     inlineStyles = [lucius|
 a:not([role="button"]), a:link:not([role="button"]), a:active:not([role="button"]) {
-  color: #{aLinkActive};
+  color: #{localCookingColorActive};
 }
 a:hover:not([role="button"]) {
-  color: #{aHover};
+  color: #{localCookingColorHover};
 }
 a:visited:not([role="button"]) {
-  color: #{aVisited};
+  color: #{localCookingColorMain};
 }
 body {
-  background-color: #{background} !important;
+  background-color: #{localCookingColorMain} !important;
   padding-bottom: 5em;
 }|]
-      where
-        aLinkActive = Color 198 40 40
-        aHover = Color 255 95 82
-        aVisited = Color 142 0 0
-        background = Color 142 0 0
 
     inlineScripts frontendEnv = [julius|
 var frontendEnv = #{Aeson.toJSON frontendEnv}
@@ -168,10 +158,11 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 |]
 
 -- | Inject some HTML into the @<body>@ tag of our template
-mainTemplate :: Maybe (Either AuthError AuthToken)
+mainTemplate :: LocalCookingColors
+             -> Maybe (Either AuthError AuthToken)
              -> HtmlT (AbsoluteUrlT AppM) ()
              -> HtmlT (AbsoluteUrlT AppM) ()
-mainTemplate = template . masterPage
+mainTemplate colors mToken = template (masterPage colors mToken)
 
 
 

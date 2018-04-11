@@ -2,13 +2,12 @@
     GeneralizedNewtypeDeriving
   , OverloadedStrings
   , OverloadedLists
-  , RecordWildCards
   #-}
 
 module Google.ReCaptcha where
 
 import Data.Text (Text)
-import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), Value (Object), (.:))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object), (.:))
 import Data.Aeson.Types (typeMismatch)
 import Data.URI (URI (..))
 import Data.URI.Auth (URIAuth (..))
