@@ -6,6 +6,7 @@ module LocalCooking.Server.Dependencies where
 
 import LocalCooking.Server.Dependencies.AuthToken (authTokenServer)
 import LocalCooking.Server.Dependencies.Register (registerServer)
+import LocalCooking.Server.Dependencies.UserEmail (userEmailServer)
 import LocalCooking.Types (AppM)
 
 import Web.Routes.Nested (RouterT, l_, o_, (</>))
@@ -18,6 +19,7 @@ dependencies :: SparrowServerT (MiddlewareT AppM) AppM () -- ^ Extra deps
 dependencies deps = do
   match (l_ "authToken" </> o_) =<< unpackServer (Topic ["authToken"]) authTokenServer
   match (l_ "register" </> o_) =<< unpackServer (Topic ["register"]) registerServer
+  match (l_ "userEmail" </> o_) =<< unpackServer (Topic ["userEmail"]) userEmailServer
   deps
 
 
