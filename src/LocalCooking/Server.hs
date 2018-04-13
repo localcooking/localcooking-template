@@ -44,7 +44,8 @@ data LocalCookingArgs siteLinks sec = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString
   , localCookingArgsFrontendMin :: BS.ByteString
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)]
-  , localCookingArgsHTTP        :: MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()
+  , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT AppM)
+                                -> RouterT (MiddlewareT AppM) sec AppM ()
   , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) AppM ()
   , localCookingArgsColors      :: LocalCookingColors
   }

@@ -13,7 +13,7 @@ import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenIni
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..), Development (..))
 import LocalCooking.Template (html)
-import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink))
+import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
 import LocalCooking.Auth.Error (AuthError (..), PreliminaryAuthToken (..))
 import LocalCooking.Common.AuthToken (AuthToken)
 import LocalCooking.Colors (LocalCookingColors)
@@ -49,18 +49,6 @@ import Control.Logging (log')
 import qualified Crypto.Saltine.Class as NaCl
 
 
-handleAuthToken :: LocalCookingColors
-                -> MiddlewareT AppM
-handleAuthToken colors app req resp =
-  case join $ lookup "authToken" $ queryString req of
-    Nothing ->
-      (action $ get $ html colors Nothing "") app req resp
-    Just json -> case Aeson.decode $ LBS.fromStrict json of
-      Nothing ->
-        (action $ get $ html colors Nothing "") app req resp
-      Just (PreliminaryAuthToken mEToken) ->
-        (action $ get $ html colors mEToken "") app req resp
-
 
 
 router :: forall siteLinks sec
@@ -72,7 +60,7 @@ router :: forall siteLinks sec
        -> [(FilePath, BS.ByteString)] -- ^ Favicons
        -> LocalCookingColors
        -> Proxy siteLinks
-       -> (MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ())
+       -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ())
        -> RouterT (MiddlewareT AppM) sec AppM ()
 router
   frontend
@@ -84,13 +72,23 @@ router
   = do
   Env{envHostname,envTls} <- lift ask
 
-  let handleAuthToken' = handleAuthToken colors
+  let handleAuthToken :: siteLinks
+                      -> MiddlewareT AppM
+      handleAuthToken link app req resp =
+        case join $ lookup "authToken" $ queryString req of
+          Nothing ->
+            (action $ get $ html colors Nothing link "") app req resp
+          Just json -> case Aeson.decode $ LBS.fromStrict json of
+            Nothing ->
+              (action $ get $ html colors Nothing link "") app req resp
+            Just (PreliminaryAuthToken mEToken) ->
+              (action $ get $ html colors mEToken link "") app req resp
 
   -- main routes
-  matchHere handleAuthToken'
-  match (l_ "about" </> o_) handleAuthToken'
-  match (l_ "register" </> o_) handleAuthToken'
-  handles handleAuthToken'
+  matchHere (handleAuthToken rootLink)
+  match (l_ "about" </> o_) (handleAuthToken rootLink)
+  match (l_ "register" </> o_) (handleAuthToken registerLink)
+  handles handleAuthToken
   matchAny $ \_ _ resp -> do
     let redirectUri = URI (Strict.Just $ if envTls then "https" else "http")
                           True
@@ -196,7 +194,7 @@ httpServer :: LocalCookingSiteLinks siteLinks
            -> [(FilePath, BS.ByteString)] -- ^ Favicons
            -> LocalCookingColors
            -> Proxy siteLinks
-           -> (MiddlewareT AppM -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ HTTP handlers
+           -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ HTTP handlers
            -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Dependencies
            -> MiddlewareT AppM
 httpServer frontend frontendEnv favicons colors siteLinks handlers dependencies =

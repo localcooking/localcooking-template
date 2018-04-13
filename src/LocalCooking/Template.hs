@@ -17,6 +17,7 @@ import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
 import           LocalCooking.Types.Keys (Keys (..))
 import           LocalCooking.Auth.Error (AuthError, PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
+import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
 import           Facebook.App (Credentials (..))
 import           Google.Keys (GoogleCredentials (..))
 import           Google.Analytics (googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..))
@@ -72,17 +73,21 @@ htmlLight s content = do
                   . mapHeaders ([("content-Type", "text/html")] ++)
 
 
-html :: LocalCookingColors
+html :: LocalCookingSiteLinks siteLinks
+     => LocalCookingColors
      -> Maybe (Either AuthError AuthToken)
+     -> siteLinks
      -> HtmlT (AbsoluteUrlT AppM) ()
      -> FileExtListenerT AppM ()
-html colors mToken = htmlLight status200 . mainTemplate colors mToken
+html colors mToken link = htmlLight status200 . mainTemplate colors mToken link
 
 
-masterPage :: LocalCookingColors
+masterPage :: LocalCookingSiteLinks siteLinks
+           => LocalCookingColors
            -> Maybe (Either AuthError AuthToken)
+           -> siteLinks
            -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
-masterPage LocalCookingColors{..} mToken =
+masterPage LocalCookingColors{..} mToken link =
   let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
       page = def
   in  page
@@ -99,7 +104,7 @@ masterPage LocalCookingColors{..} mToken =
             link_ [rel_ "mask-icon", href_ "/safari-pinned-tab.svg", makeAttribute "color" "#c62828"]
             meta_ [name_ "msapplication-TileColor", content_ "#c62828"]
             meta_ [name_ "theme-color", content_ "#ffffff"]
-        , pageTitle = "Local Cooking"
+        , pageTitle = toDocumentTitle link
         , styles =
           deploy M.Css Inline $ renderCssUrl (\_ _ -> undefined) inlineStyles
         , bodyScripts = do
@@ -158,11 +163,13 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 |]
 
 -- | Inject some HTML into the @<body>@ tag of our template
-mainTemplate :: LocalCookingColors
+mainTemplate :: LocalCookingSiteLinks siteLinks
+             => LocalCookingColors
              -> Maybe (Either AuthError AuthToken)
+             -> siteLinks
              -> HtmlT (AbsoluteUrlT AppM) ()
              -> HtmlT (AbsoluteUrlT AppM) ()
-mainTemplate colors mToken = template (masterPage colors mToken)
+mainTemplate colors mToken = template . masterPage colors mToken
 
 
 
