@@ -107,8 +107,8 @@ authTokenServer initIn = do
               pure (Just thread)
           , serverOnReceive = \ServerArgs{serverDeltaReject} r -> case r of
               AuthTokenDeltaInLogout -> do
-                serverDeltaReject
                 logoutAuth authToken
+                serverDeltaReject
           }
         }
 
