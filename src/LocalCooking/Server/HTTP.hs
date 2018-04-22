@@ -9,6 +9,7 @@
 
 module LocalCooking.Server.HTTP where
 
+import LocalCooking.Server.Assets (privacyPolicy)
 import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInFacebookCode), AuthTokenInitOut (AuthTokenInitOutSuccess))
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..), Development (..))
@@ -23,7 +24,7 @@ import Facebook.State (FacebookLoginState (..))
 import Web.Routes.Nested (RouterT, match, matchHere, matchAny, action, post, get, text, textOnly, l_, (</>), o_, route)
 import Web.Dependencies.Sparrow.Types (ServerContinue (ServerContinue, serverContinue), ServerReturn (ServerReturn, serverInitOut))
 import Network.Wai (strictRequestBody, queryString)
-import Network.Wai.Middleware.ContentType (bytestring, FileExt (Other, JavaScript))
+import Network.Wai.Middleware.ContentType (bytestring, FileExt (Other, JavaScript, Html))
 import Network.Wai.Trans (MiddlewareT)
 import Network.HTTP.Types (status302)
 import qualified Data.Text                 as T
@@ -109,6 +110,10 @@ Disallow: /facebookLoginDeauthorize
     let (file', ext) = T.breakOn "." (T.pack file)
     match (l_ file' </> o_) $ action $ get $
       bytestring (Other (T.dropWhile (== '.') ext)) (LBS.fromStrict content)
+
+  -- privacy policy
+  match (l_ "privacypolicy" </> o_) $ action $ get $
+    bytestring Html (LBS.fromStrict privacyPolicy)
 
   -- application
   match (l_ "index" </> o_) $ \app req resp -> do

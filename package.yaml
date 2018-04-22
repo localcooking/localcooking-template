@@ -39,6 +39,7 @@ dependencies:
 - directory
 - emailaddress
 - extractable-singleton
+- file-embed
 - heredoc
 - http-client
 - http-client-tls
