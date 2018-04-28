@@ -8,7 +8,7 @@ module LocalCooking.Server.Dependencies.UserEmail where
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..))
 import LocalCooking.Auth (usersAuthToken)
-import LocalCooking.Common.AuthToken (AuthToken)
+import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Database.Query.User (getEmail)
 
 import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)

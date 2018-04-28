@@ -51,6 +51,7 @@ dependencies:
 - monad-logger
 - mtl
 - nested-routes >= 9.0.0.1
+- newtype
 - optparse-applicative
 - path
 - path-extra >= 0.2.0

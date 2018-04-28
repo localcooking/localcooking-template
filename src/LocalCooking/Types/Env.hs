@@ -8,7 +8,7 @@ module LocalCooking.Types.Env where
 
 import LocalCooking.Types.Keys (Keys)
 import LocalCooking.Common.Password (HashedPassword)
-import LocalCooking.Common.AuthToken (AuthToken)
+import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Database.Schema.User (UserId)
 
 import Data.TimeMap (TimeMap, newTimeMap)

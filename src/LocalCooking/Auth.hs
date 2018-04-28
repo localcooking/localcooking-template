@@ -6,7 +6,8 @@ module LocalCooking.Auth where
 
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..))
-import LocalCooking.Common.AuthToken (AuthToken, genAuthToken)
+import LocalCooking.Common.AccessToken (genAccessToken)
+import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Database.Schema.User (UserId)
 
 import qualified Data.TimeMap as TimeMap
@@ -14,6 +15,7 @@ import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Concurrent.STM (atomically)
 import qualified Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
+import Control.Newtype (Newtype (pack))
 
 
 
@@ -22,7 +24,7 @@ loginAuth userId = do
   Env{envAuthTokens} <- ask
 
   liftIO $ do
-    authToken <- genAuthToken
+    authToken <- pack <$> genAccessToken
     TimeMap.insert authToken userId envAuthTokens
     pure authToken
 

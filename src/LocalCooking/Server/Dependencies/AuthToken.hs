@@ -11,7 +11,7 @@ import LocalCooking.Types.Keys (Keys (..))
 import LocalCooking.Types.Env (Env (..), Managers (..))
 import LocalCooking.Auth (loginAuth, logoutAuth, usersAuthToken)
 import LocalCooking.Common.Password (HashedPassword)
-import LocalCooking.Common.AuthToken (AuthToken)
+import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Database.Query.User (loginWithFB, login, AuthTokenFailure)
 import Text.EmailAddress (EmailAddress)
 import Facebook.Types (FacebookLoginCode)
@@ -95,14 +95,14 @@ authTokenServer :: Server AppM AuthTokenInitIn
                                AuthTokenDeltaIn
                                AuthTokenDeltaOut
 authTokenServer initIn = do
-  Env{envAuthTokenExpire,envDatabase} <- ask
   let serverReturnSuccess authToken = ServerContinue
         { serverOnUnsubscribe = pure ()
         , serverContinue = \_ -> pure ServerReturn
           { serverInitOut = AuthTokenInitOutSuccess authToken
           , serverOnOpen = \ServerArgs{serverSendCurrent} -> do
+              Env{envAuthTokenExpire} <- ask
               thread <- Aligned.liftBaseWith $ \runInBase -> async $ do
-                () <- atomically $ TMapMVar.lookup envAuthTokenExpire authToken
+                () <- atomically (TMapMVar.lookup envAuthTokenExpire authToken)
                 fmap runSingleton $ runInBase $ serverSendCurrent AuthTokenDeltaOutRevoked
               pure (Just thread)
           , serverOnReceive = \ServerArgs{serverDeltaReject} r -> case r of
@@ -115,7 +115,8 @@ authTokenServer initIn = do
   case initIn of
     -- invoked remotely from a client whenever casually attempting a normal login
     AuthTokenInitInLogin email password -> do
-      eUserId <- liftIO $ login envDatabase email password
+      Env{envDatabase} <- ask
+      eUserId <- liftIO (login envDatabase email password)
 
       case eUserId of
         Left e -> pure $ Just ServerContinue
@@ -148,14 +149,16 @@ authTokenServer initIn = do
         , envTls
         } <- ask
 
-      eX <- liftIO $ handleFacebookLoginReturn managersFacebook keysFacebook envTls envHostname code
+      eX <- liftIO $ handleFacebookLoginReturn
+              managersFacebook keysFacebook envTls envHostname code
       case eX of
         Left e -> liftIO $ do
           putStr "Facebook error:"
           print e
           pure Nothing
         Right (fbToken,fbUserId) -> do
-          mUserId <- liftIO $ loginWithFB envDatabase fbToken fbUserId
+          Env{envDatabase} <- ask
+          mUserId <- liftIO (loginWithFB envDatabase fbToken fbUserId)
           case mUserId of
             Nothing -> pure Nothing -- FIXME redirect to registration page with fbUserId field filled
             Just userId -> do

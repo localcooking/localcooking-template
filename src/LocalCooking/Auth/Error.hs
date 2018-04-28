@@ -6,7 +6,7 @@
 
 module LocalCooking.Auth.Error where
 
-import LocalCooking.Common.AuthToken (AuthToken)
+import LocalCooking.Common.AccessToken.Auth (AuthToken)
 
 import Data.Aeson (ToJSON (..), FromJSON (..), (.:), (.=), object, Value (String, Object, Null))
 import Data.Aeson.Types (typeMismatch)
