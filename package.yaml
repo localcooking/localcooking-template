@@ -40,6 +40,7 @@ dependencies:
 - emailaddress
 - extractable-singleton
 - file-embed
+- hashable
 - heredoc
 - http-client
 - http-client-tls
@@ -64,7 +65,7 @@ dependencies:
 - saltine
 - shakespeare
 - smtp-mail
-- sparrow >= 0.0.1.4
+- sparrow >= 0.0.1.6
 - stm
 - strict
 - text

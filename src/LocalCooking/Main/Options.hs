@@ -6,7 +6,7 @@
 
 module LocalCooking.Main.Options where
 
-import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment)
+import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
 import qualified LocalCooking.Database.Schema.Facebook as Facebook
 import qualified LocalCooking.Database.Schema.User as User
@@ -160,9 +160,7 @@ mkEnv
 
   envSalt <- getPasswordSalt envDatabase
 
-  envAuthTokens <- atomically newTimeMap
-
-  envAuthTokenExpire <- atomically newTMapMVar
+  envTokenContexts <- atomically defTokenContexts
 
   pure
     ( Env
@@ -174,8 +172,7 @@ mkEnv
       , envManagers
       , envDatabase
       , envSalt
-      , envAuthTokens
-      , envAuthTokenExpire
+      , envTokenContexts
       }
     , fromIntegral boundPort
     )

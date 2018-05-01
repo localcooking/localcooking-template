@@ -6,6 +6,7 @@
 
 module LocalCooking.Types.Env where
 
+import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenContext, newAccessTokenContext)
 import LocalCooking.Types.Keys (Keys)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
@@ -17,7 +18,7 @@ import Data.URI.Auth.Host (URIAuthHost (..))
 import Data.Default (Default (..))
 import qualified Data.Strict.Maybe as Strict
 import Data.Pool (destroyAllResources)
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.TMapMVar.Hash (TMapMVar, newTMapMVar)
 import Crypto.Saltine.Core.Box (Nonce, newNonce)
 import System.IO.Unsafe (unsafePerformIO)
@@ -65,6 +66,22 @@ isDevelopment Env{envDevelopment} = case envDevelopment of
   Just _ -> True
 
 
+data TokenContexts = TokenContexts
+  { tokenContextAuth :: AccessTokenContext AuthToken UserId
+  }
+
+instance Default TokenContexts where
+  def = unsafePerformIO (atomically defTokenContexts)
+
+defTokenContexts :: STM TokenContexts
+defTokenContexts = do
+  tokenContextAuth <- newAccessTokenContext
+  pure TokenContexts
+    { tokenContextAuth
+    }
+
+
+
 
 data Env = Env
   { envHostname        :: URIAuth
@@ -75,22 +92,20 @@ data Env = Env
   , envManagers        :: Managers
   , envDatabase        :: ConnectionPool
   , envSalt            :: HashedPassword
-  , envAuthTokens      :: TimeMap AuthToken UserId
-  , envAuthTokenExpire :: TMapMVar AuthToken ()
+  , envTokenContexts   :: TokenContexts
   }
 
 instance Default Env where
   def = Env
-    { envHostname    = URIAuth Strict.Nothing Localhost (Strict.Just 3000)
-    , envSMTPHost    = Localhost
-    , envDevelopment = def
-    , envTls         = False
-    , envKeys        = error "No access to secret keys in default environment"
-    , envManagers    = def
-    , envDatabase    = error "No database"
-    , envSalt        = error "No salt"
-    , envAuthTokens  = unsafePerformIO $ atomically newTimeMap
-    , envAuthTokenExpire = unsafePerformIO $ atomically newTMapMVar
+    { envHostname      = URIAuth Strict.Nothing Localhost (Strict.Just 3000)
+    , envSMTPHost      = Localhost
+    , envDevelopment   = def
+    , envTls           = False
+    , envKeys          = error "No access to secret keys in default environment"
+    , envManagers      = def
+    , envDatabase      = error "No database"
+    , envSalt          = error "No salt"
+    , envTokenContexts = def
     }
 
 

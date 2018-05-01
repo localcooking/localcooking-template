@@ -12,9 +12,10 @@ module LocalCooking.Server where
 import LocalCooking.Server.HTTP (httpServer)
 import LocalCooking.Server.Dependencies (servedDependencies)
 import LocalCooking.Types (AppM)
-import LocalCooking.Types.Env (Env (..))
+import LocalCooking.Types.Env (Env (..), TokenContexts (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Colors (LocalCookingColors)
+import LocalCooking.Server.Dependencies.AccessToken.Generic (expireThread)
 
 import Web.Routes.Nested (RouterT, textOnly)
 import Web.Dependencies.Sparrow (SparrowServerT)
@@ -60,20 +61,13 @@ server :: forall sec siteLinks
        -> AppM ()
 server port LocalCookingArgs{..} = do
   -- auth token expiring checker - FIXME use a cassandra database instead probably
-  env@Env{envAuthTokens,envAuthTokenExpire} <- ask
-  liftIO $ void $ async $ forever $ do
-    xs <- flip TimeMap.takeFromNow envAuthTokens $ fromRational $ toRational $ secondsToDiffTime $
-      let minute = 60
-          hour = 60 * minute
-          day = 24 * hour
-      in  2 * minute -- FIXME expire after a day?
-    forM_ xs $ \(authToken,userId) -> do
-      log' $ "Auth token revoked: " <> T.pack (show authToken) <> ", for " <> T.pack (show userId)
-      atomically (TMapMVar.insert envAuthTokenExpire authToken ())
-    threadDelay $
-      let second = 10 ^ 6
-          minute = second * 60
-      in  minute
+  env@Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
+  liftIO $ void $ async $ -- forever $ do
+    let delay =
+          let second = 10 ^ 6
+              minute = second * 60
+          in  minute
+    in  expireThread delay tokenContextAuth
 
   -- HTTP Server
   liftBaseWith $ \runInBase -> do

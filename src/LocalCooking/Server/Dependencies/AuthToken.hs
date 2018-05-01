@@ -2,16 +2,18 @@
     NamedFieldPuns
   , OverloadedStrings
   , OverloadedLists
+  , MultiParamTypeClasses
   #-}
 
 module LocalCooking.Server.Dependencies.AuthToken where
 
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Keys (Keys (..))
-import LocalCooking.Types.Env (Env (..), Managers (..))
+import LocalCooking.Types.Env (Env (..), Managers (..), TokenContexts (..))
 import LocalCooking.Auth (loginAuth, logoutAuth, usersAuthToken)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
+import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenInitIn (..), AccessTokenInitOut (..), AccessTokenDeltaOut (..), accessTokenServer)
 import LocalCooking.Database.Query.User (loginWithFB, login, AuthTokenFailure)
 import Text.EmailAddress (EmailAddress)
 import Facebook.Types (FacebookLoginCode)
@@ -28,6 +30,7 @@ import qualified Control.Monad.Trans.Control.Aligned as Aligned
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
+import Control.Newtype (Newtype (unpack, pack))
 
 
 
@@ -55,6 +58,12 @@ instance FromJSON AuthTokenInitIn where
     where
       fail = typeMismatch "AuthTokenInitIn" json
 
+instance AccessTokenInitIn AuthTokenInitIn where
+  getExists initIn = case initIn of
+    AuthTokenInitInExists x -> Just (unpack x)
+    _ -> Nothing
+
+
 data AuthTokenInitOut
   = AuthTokenInitOutSuccess AuthToken
   | AuthTokenInitOutFailure AuthTokenFailure
@@ -63,6 +72,11 @@ instance ToJSON AuthTokenInitOut where
   toJSON x = case x of
     AuthTokenInitOutFailure e -> object ["failure" .= e]
     AuthTokenInitOutSuccess y -> object ["success" .= y]
+
+instance AccessTokenInitOut AuthTokenInitOut AuthTokenFailure where
+  makeSuccess = AuthTokenInitOutSuccess . pack
+  makeFailure = AuthTokenInitOutFailure
+
 
 
 data AuthTokenDeltaIn
@@ -88,6 +102,9 @@ instance ToJSON AuthTokenDeltaOut where
     AuthTokenDeltaOutRevoked -> String "revoked"
     AuthTokenDeltaOutNew token -> object ["new" .= token]
 
+instance AccessTokenDeltaOut AuthTokenDeltaOut where
+  makeRevoke = AuthTokenDeltaOutRevoked
+
 
 
 authTokenServer :: Server AppM AuthTokenInitIn
@@ -95,72 +112,47 @@ authTokenServer :: Server AppM AuthTokenInitIn
                                AuthTokenDeltaIn
                                AuthTokenDeltaOut
 authTokenServer initIn = do
-  let serverReturnSuccess authToken = ServerContinue
-        { serverOnUnsubscribe = pure ()
-        , serverContinue = \_ -> pure ServerReturn
-          { serverInitOut = AuthTokenInitOutSuccess authToken
-          , serverOnOpen = \ServerArgs{serverSendCurrent} -> do
-              Env{envAuthTokenExpire} <- ask
-              thread <- Aligned.liftBaseWith $ \runInBase -> async $ do
-                () <- atomically (TMapMVar.lookup envAuthTokenExpire authToken)
-                fmap runSingleton $ runInBase $ serverSendCurrent AuthTokenDeltaOutRevoked
-              pure (Just thread)
-          , serverOnReceive = \ServerArgs{serverDeltaReject} r -> case r of
-              AuthTokenDeltaInLogout -> do
-                logoutAuth authToken
-                serverDeltaReject
-          }
-        }
+  Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 
-  case initIn of
-    -- invoked remotely from a client whenever casually attempting a normal login
-    AuthTokenInitInLogin email password -> do
-      Env{envDatabase} <- ask
-      eUserId <- liftIO (login envDatabase email password)
-
-      case eUserId of
-        Left e -> pure $ Just ServerContinue
-          { serverOnUnsubscribe = pure ()
-          , serverContinue = \_ -> pure ServerReturn
-            { serverInitOut = AuthTokenInitOutFailure e
-            , serverOnOpen = \ServerArgs{serverDeltaReject} -> do
-                serverDeltaReject
-                pure Nothing
-            , serverOnReceive = \_ _ -> pure ()
-            }
-          }
-        Right userId -> do
-          authToken <- loginAuth userId
-          pure $ Just $ serverReturnSuccess authToken
-
-    -- invoked remotely from client when started with an authToken in frontendEnv, or in localStorage
-    AuthTokenInitInExists authToken -> do
-      mUser <- usersAuthToken authToken
-      case mUser of
-        Nothing -> pure Nothing
-        Just _ -> pure $ Just $ serverReturnSuccess authToken
-
-    -- invoked on facebookLoginReturn, only when the user exists
-    AuthTokenInitInFacebookCode code -> do
-      env@Env
-        { envManagers = Managers{managersFacebook}
-        , envKeys = Keys{keysFacebook}
-        , envHostname
-        , envTls
-        } <- ask
-
-      eX <- liftIO $ handleFacebookLoginReturn
-              managersFacebook keysFacebook envTls envHostname code
-      case eX of
-        Left e -> liftIO $ do
-          putStr "Facebook error:"
-          print e
-          pure Nothing
-        Right (fbToken,fbUserId) -> do
+  let getAuthToken :: AuthTokenInitIn -> AppM (Either (Maybe AuthTokenFailure) AuthToken)
+      getAuthToken initIn' = case initIn' of
+        -- invoked remotely from a client whenever casually attempting a normal login
+        AuthTokenInitInLogin email password -> do
           Env{envDatabase} <- ask
-          mUserId <- liftIO (loginWithFB envDatabase fbToken fbUserId)
-          case mUserId of
-            Nothing -> pure Nothing -- FIXME redirect to registration page with fbUserId field filled
-            Just userId -> do
+          eUserId <- liftIO (login envDatabase email password)
+
+          case eUserId of
+            Left e -> pure $ Left $ Just e
+            Right userId -> do
               authToken <- loginAuth userId
-              pure $ Just $ serverReturnSuccess authToken
+              pure $ Right authToken
+
+        -- invoked remotely from client when started with an authToken in frontendEnv, or in localStorage
+        AuthTokenInitInExists _ -> pure (Left Nothing)
+
+        -- invoked on facebookLoginReturn, only when the user exists
+        AuthTokenInitInFacebookCode code -> do
+          env@Env
+            { envManagers = Managers{managersFacebook}
+            , envKeys = Keys{keysFacebook}
+            , envHostname
+            , envTls
+            } <- ask
+
+          eX <- liftIO $ handleFacebookLoginReturn
+                  managersFacebook keysFacebook envTls envHostname code
+          case eX of
+            Left e -> liftIO $ do
+              putStr "Facebook error:"
+              print e
+              pure (Left Nothing)
+            Right (fbToken,fbUserId) -> do
+              Env{envDatabase} <- ask
+              mUserId <- liftIO (loginWithFB envDatabase fbToken fbUserId)
+              case mUserId of
+                Nothing -> pure (Left Nothing) -- FIXME redirect to registration page with fbUserId field filled
+                Just userId -> do
+                  authToken <- loginAuth userId
+                  pure (Right authToken)
+
+  accessTokenServer tokenContextAuth getAuthToken (\revoke AuthTokenDeltaInLogout -> revoke) (\_ -> pure ()) initIn

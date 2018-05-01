@@ -5,9 +5,10 @@
 module LocalCooking.Auth where
 
 import LocalCooking.Types (AppM)
-import LocalCooking.Types.Env (Env (..))
+import LocalCooking.Types.Env (Env (..), TokenContexts (..))
 import LocalCooking.Common.AccessToken (genAccessToken)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
+import LocalCooking.Server.Dependencies.AccessToken.Generic (lookupAccess, insertAccess, revokeAccess)
 import LocalCooking.Database.Schema.User (UserId)
 
 import qualified Data.TimeMap as TimeMap
@@ -21,28 +22,20 @@ import Control.Newtype (Newtype (pack))
 
 loginAuth :: UserId -> AppM AuthToken
 loginAuth userId = do
-  Env{envAuthTokens} <- ask
+  Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 
-  liftIO $ do
-    authToken <- pack <$> genAccessToken
-    TimeMap.insert authToken userId envAuthTokens
-    pure authToken
+  liftIO (insertAccess tokenContextAuth userId)
 
 
 usersAuthToken :: AuthToken -> AppM (Maybe UserId)
 usersAuthToken authToken = do
-  Env{envAuthTokens} <- ask
+  Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 
-  liftIO $ do
-    mUserId <- atomically (TimeMap.lookup authToken envAuthTokens)
-    TimeMap.touch authToken envAuthTokens
-    pure mUserId
+  liftIO (lookupAccess tokenContextAuth authToken)
 
 
 logoutAuth :: AuthToken -> AppM ()
 logoutAuth authToken = do
-  Env{envAuthTokens,envAuthTokenExpire} <- ask
+  Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 
-  liftIO $ atomically $ do
-    TimeMap.delete authToken envAuthTokens
-    TMapMVar.insert envAuthTokenExpire authToken ()
+  liftIO $ atomically $ revokeAccess tokenContextAuth authToken
