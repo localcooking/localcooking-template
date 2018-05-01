@@ -94,13 +94,11 @@ instance FromJSON AuthTokenDeltaIn where
 
 
 data AuthTokenDeltaOut
-  = AuthTokenDeltaOutNew AuthToken
-  | AuthTokenDeltaOutRevoked -- remotely logged out
+  = AuthTokenDeltaOutRevoked -- remotely logged out
 
 instance ToJSON AuthTokenDeltaOut where
   toJSON x = case x of
     AuthTokenDeltaOutRevoked -> String "revoked"
-    AuthTokenDeltaOutNew token -> object ["new" .= token]
 
 instance AccessTokenDeltaOut AuthTokenDeltaOut where
   makeRevoke = AuthTokenDeltaOutRevoked
