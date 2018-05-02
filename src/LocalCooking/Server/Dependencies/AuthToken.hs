@@ -3,6 +3,8 @@
   , OverloadedStrings
   , OverloadedLists
   , MultiParamTypeClasses
+  , DeriveGeneric
+  , GeneralizedNewtypeDeriving
   #-}
 
 module LocalCooking.Server.Dependencies.AuthToken where
@@ -14,18 +16,21 @@ import LocalCooking.Auth (loginAuth)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenInitIn (..), AccessTokenInitOut (..), AccessTokenDeltaOut (..), accessTokenServer)
-import LocalCooking.Database.Query.User (loginWithFB, login, AuthTokenFailure)
+import LocalCooking.Database.Query.User (loginWithFB, login, LoginFailure)
 import Text.EmailAddress (EmailAddress)
 import Facebook.Types (FacebookLoginCode)
-import Facebook.Return (handleFacebookLoginReturn)
+import Facebook.Return (FacebookLoginReturnError, handleFacebookLoginReturn)
 
 import Web.Dependencies.Sparrow (Server)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), (.:), Value (..))
 import Data.Aeson.Types (typeMismatch)
+import Data.Text (Text)
 import Control.Applicative ((<|>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Control.Newtype (Newtype (unpack, pack))
+import Test.QuickCheck (Arbitrary (..), oneof)
+import GHC.Generics (Generic)
 
 
 
@@ -57,6 +62,96 @@ instance AccessTokenInitIn AuthTokenInitIn where
   getExists initIn = case initIn of
     AuthTokenInitInExists x -> Just (unpack x)
     _ -> Nothing
+
+
+
+
+
+
+-- | Global AuthToken failure type
+data AuthTokenFailure
+  = FBLoginReturnBad Text Text
+  | FBLoginReturnDenied Text
+  | FBLoginReturnBadParse
+  | FBLoginReturnNoUser
+  | FBLoginReturnError FacebookLoginReturnError
+  | AuthTokenLoginFailure LoginFailure
+  deriving (Eq, Show, Generic)
+
+instance Arbitrary AuthTokenFailure where
+  arbitrary = oneof
+    [ FBLoginReturnBad <$> arbitrary <*> arbitrary
+    , FBLoginReturnDenied <$> arbitrary
+    , pure FBLoginReturnBadParse
+    , pure FBLoginReturnNoUser
+    , AuthTokenLoginFailure <$> arbitrary
+    , FBLoginReturnError <$> arbitrary
+    ]
+
+instance ToJSON AuthTokenFailure where
+  toJSON x = case x of
+    FBLoginReturnBad code msg -> object
+      [ "fbBad" .= object
+        [ "code" .= code
+        , "msg" .= msg
+        ]
+      ]
+    FBLoginReturnDenied desc -> object
+      [ "fbDenied" .= object
+        [ "desc" .= desc
+        ]
+      ]
+    FBLoginReturnBadParse -> String "bad-parse"
+    FBLoginReturnNoUser -> String "no-user"
+    FBLoginReturnError x -> object
+      [ "fbLoginReturnError" .= x
+      ]
+    AuthTokenLoginFailure x -> object
+      [ "loginFailure" .= x
+      ]
+
+instance FromJSON AuthTokenFailure where
+  parseJSON json = case json of
+    Object o -> do
+      let denied = do
+            o' <- o .: "fbDenied"
+            FBLoginReturnDenied <$> o' .: "desc"
+          bad = do
+            o' <- o .: "fbBad"
+            FBLoginReturnBad <$> o' .: "code" <*> o' .: "msg"
+          failure = AuthTokenLoginFailure <$> o .: "loginFailure"
+          fbLoginReturnError = FBLoginReturnError <$> o .: "fbLoginReturnError"
+      denied <|> bad <|> failure <|> fbLoginReturnError
+    String s
+      | s == "bad-parse" -> pure FBLoginReturnBadParse
+      | s == "no-user" -> pure FBLoginReturnNoUser
+      | otherwise -> fail
+    _ -> fail
+    where
+      fail = typeMismatch "AuthError" json
+
+
+
+newtype PreliminaryAuthToken = PreliminaryAuthToken
+  { getPreliminaryAuthToken :: Maybe (Either AuthTokenFailure AuthToken)
+  } deriving (Eq, Show, Generic, Arbitrary)
+
+instance ToJSON PreliminaryAuthToken where
+  toJSON (PreliminaryAuthToken mTkn) = case mTkn of
+    Nothing -> toJSON (Nothing :: Maybe ())
+    Just eTkn -> case eTkn of
+      Left e -> object ["err" .= e]
+      Right tkn -> object ["token" .= tkn]
+
+instance FromJSON PreliminaryAuthToken where
+  parseJSON (Object o) = do
+    let err = Left <$> o .: "err"
+        tkn = Right <$> o .: "token"
+    PreliminaryAuthToken . Just <$> (err <|> tkn)
+  parseJSON Null = pure (PreliminaryAuthToken Nothing)
+  parseJSON x = typeMismatch "PreliminaryAuthToken" x
+
+
 
 
 data AuthTokenInitOut
@@ -107,6 +202,7 @@ authTokenServer :: Server AppM AuthTokenInitIn
 authTokenServer initIn = do
   Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 
+  -- FIXME AuthTokenFailure is low-level DB - rename?
   let getAuthToken :: AuthTokenInitIn -> AppM (Either (Maybe AuthTokenFailure) AuthToken)
       getAuthToken initIn' = case initIn' of
         -- invoked remotely from a client whenever casually attempting a normal login
@@ -115,7 +211,7 @@ authTokenServer initIn = do
           eUserId <- liftIO (login envDatabase email password)
 
           case eUserId of
-            Left e -> pure $ Left $ Just e
+            Left e -> pure $ Left $ Just $ AuthTokenLoginFailure e
             Right userId -> do
               authToken <- loginAuth userId
               pure $ Right authToken
@@ -135,15 +231,12 @@ authTokenServer initIn = do
           eX <- liftIO $ handleFacebookLoginReturn
                   managersFacebook keysFacebook envTls envHostname code
           case eX of
-            Left e -> liftIO $ do
-              putStr "Facebook error:"
-              print e
-              pure (Left Nothing)
+            Left e -> pure $ Left $ Just $ FBLoginReturnError e
             Right (fbToken,fbUserId) -> do
               Env{envDatabase} <- ask
               mUserId <- liftIO (loginWithFB envDatabase fbToken fbUserId)
               case mUserId of
-                Nothing -> pure (Left Nothing) -- FIXME redirect to registration page with fbUserId field filled
+                Nothing -> pure $ Left $ Just FBLoginReturnNoUser
                 Just userId -> do
                   authToken <- loginAuth userId
                   pure (Right authToken)

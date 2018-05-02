@@ -15,11 +15,12 @@ import           LocalCooking.Types (AppM)
 import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
 import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
 import           LocalCooking.Types.Keys (Keys (..))
-import           LocalCooking.Auth.Error (AuthError, PreliminaryAuthToken (..))
+import           LocalCooking.Server.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
 import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
 import           LocalCooking.Common.AccessToken.Auth (AuthToken)
 import           Facebook.App (Credentials (..))
+import           Facebook.State (FacebookLoginUnsavedFormData)
 import           Google.Keys (GoogleCredentials (..))
 import           Google.Analytics (googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..))
 import           Google.ReCaptcha (googleReCaptchaAssetURI)
@@ -75,19 +76,21 @@ htmlLight s content = do
 
 html :: LocalCookingSiteLinks siteLinks
      => LocalCookingColors
-     -> Maybe (Either AuthError AuthToken)
+     -> PreliminaryAuthToken
+     -> Maybe FacebookLoginUnsavedFormData
      -> siteLinks
      -> HtmlT (AbsoluteUrlT AppM) ()
      -> FileExtListenerT AppM ()
-html colors mToken link = htmlLight status200 . mainTemplate colors mToken link
+html colors preliminary formData link = htmlLight status200 . mainTemplate colors preliminary formData link
 
 
 masterPage :: LocalCookingSiteLinks siteLinks
            => LocalCookingColors
-           -> Maybe (Either AuthError AuthToken)
+           -> PreliminaryAuthToken
+           -> Maybe FacebookLoginUnsavedFormData
            -> siteLinks
            -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
-masterPage LocalCookingColors{..} mToken link =
+masterPage LocalCookingColors{..} preliminary formData link =
   let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
       page = def
   in  page
@@ -130,7 +133,7 @@ masterPage LocalCookingColors{..} mToken link =
                 , frontendEnvFacebookClientID = clientId
                 , frontendEnvGoogleReCaptchaSiteKey = googleReCaptcha
                 , frontendEnvSalt = envSalt
-                , frontendEnvAuthToken = PreliminaryAuthToken mToken
+                , frontendEnvAuthToken = preliminary
                 }
           script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ inlineScripts frontendEnv
         }
@@ -165,11 +168,12 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 -- | Inject some HTML into the @<body>@ tag of our template
 mainTemplate :: LocalCookingSiteLinks siteLinks
              => LocalCookingColors
-             -> Maybe (Either AuthError AuthToken)
+             -> PreliminaryAuthToken
+             -> Maybe FacebookLoginUnsavedFormData
              -> siteLinks
              -> HtmlT (AbsoluteUrlT AppM) ()
              -> HtmlT (AbsoluteUrlT AppM) ()
-mainTemplate colors mToken = template . masterPage colors mToken
+mainTemplate colors preliminary formData = template . masterPage colors preliminary formData
 
 
 
