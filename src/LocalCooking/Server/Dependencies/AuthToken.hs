@@ -10,7 +10,7 @@ module LocalCooking.Server.Dependencies.AuthToken where
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Keys (Keys (..))
 import LocalCooking.Types.Env (Env (..), Managers (..), TokenContexts (..))
-import LocalCooking.Auth (loginAuth, logoutAuth, usersAuthToken)
+import LocalCooking.Auth (loginAuth)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenInitIn (..), AccessTokenInitOut (..), AccessTokenDeltaOut (..), accessTokenServer)
@@ -19,17 +19,12 @@ import Text.EmailAddress (EmailAddress)
 import Facebook.Types (FacebookLoginCode)
 import Facebook.Return (handleFacebookLoginReturn)
 
-import Web.Dependencies.Sparrow (Server, ServerContinue (..), ServerReturn (..), ServerArgs (..))
+import Web.Dependencies.Sparrow (Server)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), (.:), Value (..))
 import Data.Aeson.Types (typeMismatch)
-import Data.Singleton.Class (Extractable (runSingleton))
 import Control.Applicative ((<|>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
-import qualified Control.Monad.Trans.Control.Aligned as Aligned
-import Control.Concurrent.Async (async)
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
 import Control.Newtype (Newtype (unpack, pack))
 
 
@@ -94,13 +89,11 @@ instance FromJSON AuthTokenDeltaIn where
 
 
 data AuthTokenDeltaOut
-  = AuthTokenDeltaOutNew AuthToken
-  | AuthTokenDeltaOutRevoked -- remotely logged out
+  = AuthTokenDeltaOutRevoked -- remotely logged out
 
 instance ToJSON AuthTokenDeltaOut where
   toJSON x = case x of
     AuthTokenDeltaOutRevoked -> String "revoked"
-    AuthTokenDeltaOutNew token -> object ["new" .= token]
 
 instance AccessTokenDeltaOut AuthTokenDeltaOut where
   makeRevoke = AuthTokenDeltaOutRevoked
@@ -132,7 +125,7 @@ authTokenServer initIn = do
 
         -- invoked on facebookLoginReturn, only when the user exists
         AuthTokenInitInFacebookCode code -> do
-          env@Env
+          Env
             { envManagers = Managers{managersFacebook}
             , envKeys = Keys{keysFacebook}
             , envHostname
