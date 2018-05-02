@@ -5,21 +5,21 @@
   , ScopedTypeVariables
   , DataKinds
   , QuasiQuotes
+  , RecordWildCards
   #-}
 
 module LocalCooking.Server.HTTP where
 
 import LocalCooking.Server.Assets (privacyPolicy)
-import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInFacebookCode), AuthTokenInitOut (AuthTokenInitOutSuccess))
+import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInFacebookCode), AuthTokenInitOut (..), AuthTokenFailure (..), PreliminaryAuthToken (..))
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..), Development (..))
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
-import LocalCooking.Auth.Error (AuthError (..), PreliminaryAuthToken (..))
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Colors (LocalCookingColors)
 import Facebook.Types (FacebookLoginCode (..))
-import Facebook.State (FacebookLoginState (..))
+import Facebook.State (FacebookLoginState (..), FacebookLoginUnsavedFormData (..))
 
 import Web.Routes.Nested (RouterT, match, matchHere, matchAny, action, post, get, text, textOnly, l_, (</>), o_, route)
 import Web.Dependencies.Sparrow.Types (ServerContinue (ServerContinue, serverContinue), ServerReturn (ServerReturn, serverInitOut))
@@ -73,17 +73,19 @@ router
   = do
   Env{envHostname,envTls} <- lift ask
 
+  -- Turns a handled route's potential `?authToken=<preliminary>` into a FrontendEnv
   let handleAuthToken :: siteLinks
                       -> MiddlewareT AppM
       handleAuthToken link app req resp =
-        case join $ lookup "authToken" $ queryString req of
-          Nothing ->
-            (action $ get $ html colors Nothing link "") app req resp
-          Just json -> case Aeson.decode $ LBS.fromStrict json of
-            Nothing ->
-              (action $ get $ html colors Nothing link "") app req resp
-            Just (PreliminaryAuthToken mEToken) ->
-              (action $ get $ html colors mEToken link "") app req resp
+        let preliminary = case join $ lookup "authToken" $ queryString req of
+              Nothing -> PreliminaryAuthToken Nothing
+              Just json -> case Aeson.decode (LBS.fromStrict json) of
+                Nothing -> PreliminaryAuthToken Nothing
+                Just x -> x
+            formData = case join $ lookup "formData" $ queryString req of
+              Nothing -> Nothing
+              Just json -> Aeson.decode (LBS.fromStrict json)
+        in  (action $ get $ html colors preliminary formData link "") app req resp
 
   -- main routes
   matchHere (handleAuthToken rootLink)
@@ -131,7 +133,7 @@ Disallow: /facebookLoginDeauthorize
   -- TODO handle authenticated linking
   match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do
     let qs = queryString req
-    ( eToken :: Either AuthError AuthToken
+    ( eToken :: Either AuthTokenFailure AuthToken
       , mFbState :: Maybe (FacebookLoginState siteLinks)
       ) <- case do  let bad = do
                           errorCode <- join $ lookup "error_code" qs
@@ -152,34 +154,64 @@ Disallow: /facebookLoginDeauthorize
                           pure $ Right (FacebookLoginCode code, state)
                     bad <|> good <|> denied of
 
-              Nothing -> do
-                liftIO $ do
-                  putStr "Bad /facebookLoginReturn parse: "
-                  print qs
-                pure (Left FBLoginReturnBadParse, Nothing)
+              Nothing -> pure (Left FBLoginReturnBadParse, Nothing)
               Just eX -> case eX of
                 Left e -> pure (Left e, Nothing)
+                -- Successfully fetched the fbCode and FacebookState from query string
                 Right (code, state) -> do
-                  mCont <- authTokenServer $ AuthTokenInitInFacebookCode code
+                  -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
+                  mCont <- authTokenServer (AuthTokenInitInFacebookCode code)
                   case mCont of
                     Nothing -> pure (Left FBLoginReturnNoUser, Just state)
                     Just ServerContinue{serverContinue} -> do
-                      ServerReturn{serverInitOut = AuthTokenInitOutSuccess authToken} <- serverContinue undefined
-                      pure (Right authToken, Just state)
+                      -- FIXME partial, could fail feasibly
+                      ServerReturn{serverInitOut} <- serverContinue undefined
+                      case serverInitOut of
+                        AuthTokenInitOutSuccess authToken ->
+                          pure (Right authToken, Just state)
+                        AuthTokenInitOutFailure e ->
+                          pure (Left e, Just state)
 
-    let redirectUri =
+    let redirectUri :: URI
+        redirectUri =
           packLocation
             (Strict.Just $ if envTls then "https" else "http")
             True
-            envHostname $
-              let loc = toLocation $
-                          case mFbState of
-                            Nothing -> rootLink
-                            Just FacebookLoginState{facebookLoginStateOrigin} ->
-                              facebookLoginStateOrigin
-              in  loc <&> ( "authToken"
-                          , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
-                          )
+            envHostname $ case mFbState of
+              -- Facebook rejected it
+              Nothing ->
+                let loc = toLocation (rootLink :: siteLinks)
+                in  loc <&> ( "authToken"
+                            , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                            )
+              Just FacebookLoginState{..} ->
+                case eToken of
+                  -- Redirect to register page, populate with fbUserId form data
+                  Left FBLoginReturnNoUser ->
+                    let loc = toLocation (registerLink :: siteLinks)
+                    in  loc <&> ( "authToken"
+                                , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                                )
+                            <&> ( "formData"
+                                , Just $ LBS8.toString $ Aeson.encode FacebookLoginUnsavedFormDataRegister
+                                  { facebookLoginUnsavedFormDataRegisterEmail = ""
+                                  , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
+                                  -- FIXME pack fbUserId as unsaved form data
+                                  }
+                                )
+                  _ ->
+                    let loc = toLocation facebookLoginStateOrigin
+                        -- Add `?authToken=<preliminary>` query param to redirect origin
+                        loc' = loc <&> ( "authToken"
+                                       , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                                       )
+                    in  case facebookLoginStateFormData of
+                          Just formData ->
+                            loc' <&> ( "formData"
+                                     , Just $ LBS8.toString $ Aeson.encode formData
+                                     )
+                          Nothing -> loc'
+
     resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
 
   -- TODO only allow facebook's ip as sockHost client?
