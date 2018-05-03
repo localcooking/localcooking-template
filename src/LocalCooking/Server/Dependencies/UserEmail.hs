@@ -27,11 +27,12 @@ import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)
 import Text.EmailAddress (EmailAddress)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), object, (.=), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
+import Data.Aeson.JSONUnit (JSONUnit (..))
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
 
-type UserEmailInitIn = AuthInitIn AuthToken ()
+type UserEmailInitIn = AuthInitIn AuthToken JSONUnit
 -- newtype UserEmailInitIn = UserEmailInitIn
 --   { userEmailInitInAuthToken :: AuthToken
 --   }
@@ -59,15 +60,15 @@ userEmailServer :: Server AppM UserEmailInitIn
                                UserEmailInitOut
                                JSONVoid
                                JSONVoid
-userEmailServer = staticServer $ \(AuthInitIn authToken ()) -> do
+userEmailServer = staticServer $ \(AuthInitIn authToken JSONUnit) -> do
   Env{envDatabase} <- ask
 
   mEmail <- do
     mUserId <- usersAuthToken authToken
     case mUserId of
       Nothing -> pure Nothing
-      Just userId -> liftIO $ getEmail envDatabase userId
+      Just userId -> liftIO (getEmail envDatabase userId)
 
   case mEmail of
-    Nothing -> pure $ Just AuthInitOutNoAuth
+    Nothing -> pure (Just AuthInitOutNoAuth)
     Just email -> pure $ Just $ AuthInitOut email
