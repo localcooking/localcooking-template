@@ -5,6 +5,7 @@
 
 module LocalCooking.Server.Dependencies.Security where
 
+import LocalCooking.Server.Dependencies.AccessToken.Generic (AuthInitIn (..), AuthInitOut (..))
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..))
 import LocalCooking.Auth (usersAuthToken)
@@ -21,23 +22,20 @@ import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
 
-data SecurityInitIn = SecurityInitIn
-  { securityInitInAuthToken    :: AuthToken
-  , securityInitInEmailAddress :: EmailAddress
+data SecurityInitIn' = SecurityInitIn'
+  { securityInitInEmailAddress :: EmailAddress
   , securityInitInNewPassword  :: HashedPassword
   , securityInitInOldPassword  :: HashedPassword
   }
 
-instance FromJSON SecurityInitIn where
+instance FromJSON SecurityInitIn' where
   parseJSON json = case json of
     Object o -> do
-      authToken <- o .: "authToken"
       email <- o .: "email"
       newPassword <- o .: "newPassword"
       oldPassword <- o .: "oldPassword"
-      pure SecurityInitIn
-        { securityInitInAuthToken = authToken
-        , securityInitInEmailAddress = email
+      pure SecurityInitIn'
+        { securityInitInEmailAddress = email
         , securityInitInNewPassword = newPassword
         , securityInitInOldPassword = oldPassword
         }
@@ -45,31 +43,33 @@ instance FromJSON SecurityInitIn where
     where
       fail = typeMismatch "SecurityInitIn" json
 
+type SecurityInitIn = AuthInitIn AuthToken SecurityInitIn'
 
-data SecurityInitOut
-  = SecurityInitOutNoAuth
-  | SecurityInitOutSuccess
+
+data SecurityInitOut'
+  = SecurityInitOutSuccess
   | SecurityInitOutFailure
 
-instance ToJSON SecurityInitOut where
+instance ToJSON SecurityInitOut' where
   toJSON x = case x of
-    SecurityInitOutNoAuth -> String "no-auth"
     SecurityInitOutSuccess -> String "success"
     SecurityInitOutFailure -> String "failure"
 
+type SecurityInitOut = AuthInitOut SecurityInitOut'
+
 
 securityServer :: Server AppM SecurityInitIn
-                               SecurityInitOut
-                               JSONVoid
-                               JSONVoid
-securityServer = staticServer $ \(SecurityInitIn authToken email newPassword oldPassword) -> do
+                              SecurityInitOut
+                              JSONVoid
+                              JSONVoid
+securityServer = staticServer $ \(AuthInitIn authToken (SecurityInitIn' email newPassword oldPassword)) -> do
   Env{envDatabase} <- ask
 
   mUserId <- usersAuthToken authToken
   case mUserId of
-    Nothing -> pure $ Just SecurityInitOutNoAuth
+    Nothing -> pure $ Just AuthInitOutNoAuth
     Just userId -> do
       b <- liftIO $ changeSecurityDetails envDatabase userId (email,newPassword) oldPassword
       if b
-        then pure $ Just SecurityInitOutSuccess
-        else pure $ Just SecurityInitOutFailure
+        then pure $ Just $ AuthInitOut SecurityInitOutSuccess
+        else pure $ Just $ AuthInitOut SecurityInitOutFailure
