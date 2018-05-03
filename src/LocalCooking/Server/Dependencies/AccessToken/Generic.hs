@@ -6,7 +6,18 @@
   , RankNTypes
   , FunctionalDependencies
   , ScopedTypeVariables
+  , OverloadedStrings
   #-}
+
+{-|
+
+Module: LocalCooking.Server.Dependencies.AccessToken.Generic
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+-}
 
 module LocalCooking.Server.Dependencies.AccessToken.Generic where
 
@@ -18,6 +29,8 @@ import Data.Time (NominalDiffTime)
 import Data.TimeMap (TimeMap, newTimeMap)
 import qualified Data.TimeMap as TimeMap
 import Data.Singleton.Class (Extractable (runSingleton))
+import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object, Value (String, Object))
+import Data.Aeson.Types (typeMismatch)
 import Control.Monad (forM_, forever)
 import qualified Control.Monad.Trans.Control.Aligned as Aligned
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -28,6 +41,8 @@ import Control.Concurrent.STM.TMapMVar.Hash (TMapMVar, newTMapMVar)
 import qualified Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
 import Control.Newtype (Newtype (pack, unpack))
 
+
+-- * Classes
 
 class AccessTokenInitIn initIn where
   getExists :: initIn -> Maybe AccessToken
@@ -42,10 +57,12 @@ class AccessTokenDeltaOut deltaOut where
   makeRevoke :: deltaOut
 
 
+-- * Context
 
+-- | Global context for an access token - expiring mapping with concurrent locks
 data AccessTokenContext k a = AccessTokenContext
   { accessTokenContextSubject :: TimeMap k a
-  , accessTokenContextExpire  :: TMapMVar k () -- decay lock
+  , accessTokenContextExpire  :: TMapMVar k () -- ^ Expiration lock
   }
 
 
@@ -54,6 +71,7 @@ newAccessTokenContext :: Newtype k AccessToken => STM (AccessTokenContext k a)
 newAccessTokenContext = AccessTokenContext <$> newTimeMap <*> newTMapMVar
 
 
+-- * Utilities
 
 revokeAccess :: Hashable k
              => Eq k
@@ -90,6 +108,10 @@ lookupAccess AccessTokenContext{accessTokenContextSubject} accessToken = do
 
 
 
+-- * Global Functions
+
+-- | Independently forked thread that drains the timemap and invokes the concurrency locks when
+-- tokens expire.
 expireThread  :: Hashable k
               => Eq k
               => NominalDiffTime
@@ -105,7 +127,7 @@ expireThread expiration AccessTokenContext{..} = forever $ do
     in  minute
 
 
-
+-- | Create a Sparrow dependency for the access token implementation
 accessTokenServer :: forall k a initIn initOut err deltaIn deltaOut m stM
                    . Newtype k AccessToken
                   => Hashable k
@@ -171,3 +193,32 @@ accessTokenServer
               }
             }
 
+
+
+-- * Generic Utility Types
+
+-- | Authenticated initIn messages
+data AuthInitIn k a = AuthInitIn
+  { authInitInToken   :: k
+  , authInitInSubject :: a
+  }
+
+instance (FromJSON k, FromJSON a) => FromJSON (AuthInitIn k a) where
+  parseJSON json = case json of
+    Object o -> AuthInitIn <$> o .: "token" <*> o .: "subj"
+    _ -> fail
+    where
+      fail = typeMismatch "AuthInitIn" json
+
+
+-- | Authenticated responses, with failure
+data AuthInitOut a
+  = AuthInitOutNoAuth
+  | AuthInitOut
+    { authInitOut :: a
+    }
+
+instance ToJSON a => ToJSON (AuthInitOut a) where
+  toJSON x = case x of
+    AuthInitOutNoAuth -> String "no-auth"
+    AuthInitOut x -> object ["subj" .= x]

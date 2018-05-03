@@ -2,6 +2,16 @@
     OverloadedStrings
   #-}
 
+{-|
+
+Module: LocalCooking.Server.Dependencies
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+-}
+
 module LocalCooking.Server.Dependencies where
 
 import LocalCooking.Server.Dependencies.AuthToken (authTokenServer)
@@ -11,11 +21,12 @@ import LocalCooking.Server.Dependencies.Security (securityServer)
 import LocalCooking.Server.Dependencies.PasswordVerify (passwordVerifyServer)
 import LocalCooking.Types (AppM)
 
-import Web.Routes.Nested (RouterT, l_, o_, (</>))
-import Web.Dependencies.Sparrow (Topic (..), serveDependencies, unpackServer, SparrowServerT, match, matchGroup)
+import Web.Routes.Nested (l_, o_, (</>))
+import Web.Dependencies.Sparrow (Topic (..), unpackServer, SparrowServerT, match, matchGroup)
 import Network.Wai.Trans (MiddlewareT)
 
 
+-- | Enterprise-wide dependencies - auth tokens, registration, user details, etc.
 dependencies :: SparrowServerT (MiddlewareT AppM) AppM () -- ^ Extra deps
              -> SparrowServerT (MiddlewareT AppM) AppM ()
 dependencies deps = do
@@ -31,8 +42,3 @@ dependencies deps = do
     match (l_ "passwordVerify" </> o_)
       =<< unpackServer (Topic ["template", "passwordVerify"]) passwordVerifyServer
   deps
-
-
-servedDependencies :: SparrowServerT (MiddlewareT AppM) AppM ()
-                   -> AppM (RouterT (MiddlewareT AppM) sec AppM ())
-servedDependencies = serveDependencies . dependencies

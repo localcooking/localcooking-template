@@ -8,6 +8,16 @@
   , RecordWildCards
   #-}
 
+{-|
+
+Module: LocalCooking.Server.HTTP
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+-}
+
 module LocalCooking.Server.HTTP where
 
 import LocalCooking.Server.Assets (privacyPolicy)
@@ -38,6 +48,7 @@ import Data.Url (packLocation)
 import qualified Data.Aeson as Aeson
 import Data.Proxy (Proxy (..))
 import Data.Monoid ((<>))
+import Data.Maybe (fromMaybe)
 import qualified Data.Strict.Maybe as Strict
 import Path.Extended ((<&>), ToLocation (..), FromLocation)
 import Text.Heredoc (here)
@@ -51,7 +62,7 @@ import qualified Crypto.Saltine.Class as NaCl
 
 
 
-
+-- | Majority of server-related logic.
 router :: forall siteLinks sec
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
@@ -61,7 +72,7 @@ router :: forall siteLinks sec
        -> [(FilePath, BS.ByteString)] -- ^ Favicons
        -> LocalCookingColors
        -> Proxy siteLinks
-       -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ())
+       -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ Casual HTTP endpoints
        -> RouterT (MiddlewareT AppM) sec AppM ()
 router
   frontend
@@ -79,9 +90,7 @@ router
       handleAuthToken link app req resp =
         let preliminary = case join $ lookup "authToken" $ queryString req of
               Nothing -> PreliminaryAuthToken Nothing
-              Just json -> case Aeson.decode (LBS.fromStrict json) of
-                Nothing -> PreliminaryAuthToken Nothing
-                Just x -> x
+              Just json -> fromMaybe (PreliminaryAuthToken Nothing) (Aeson.decode (LBS.fromStrict json))
             formData = case join $ lookup "formData" $ queryString req of
               Nothing -> Nothing
               Just json -> Aeson.decode (LBS.fromStrict json)
@@ -222,7 +231,7 @@ Disallow: /facebookLoginDeauthorize
 
 
 
-
+-- | HTTP server, post-routing
 httpServer :: LocalCookingSiteLinks siteLinks
            => FromLocation siteLinks
            => ToLocation siteLinks
@@ -232,7 +241,7 @@ httpServer :: LocalCookingSiteLinks siteLinks
            -> LocalCookingColors
            -> Proxy siteLinks
            -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ HTTP handlers
-           -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Dependencies
+           -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Dependencies, post sparrow serving
            -> MiddlewareT AppM
 httpServer frontend frontendEnv favicons colors siteLinks handlers dependencies =
   route $ do

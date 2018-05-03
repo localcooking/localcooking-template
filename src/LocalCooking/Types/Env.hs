@@ -4,6 +4,18 @@
   , NamedFieldPuns
   #-}
 
+{-|
+
+Module: LocalCooking.Types.Env
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+Shared read-only data, across the server.
+
+-}
+
 module LocalCooking.Types.Env where
 
 import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenContext, newAccessTokenContext)
@@ -12,14 +24,12 @@ import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Database.Schema.User (UserId)
 
-import Data.TimeMap (TimeMap, newTimeMap)
 import Data.URI.Auth (URIAuth (..))
 import Data.URI.Auth.Host (URIAuthHost (..))
 import Data.Default (Default (..))
 import qualified Data.Strict.Maybe as Strict
 import Data.Pool (destroyAllResources)
 import Control.Concurrent.STM (STM, atomically)
-import Control.Concurrent.STM.TMapMVar.Hash (TMapMVar, newTMapMVar)
 import Crypto.Saltine.Core.Box (Nonce, newNonce)
 import System.IO.Unsafe (unsafePerformIO)
 import Network.HTTP.Client (Manager)
@@ -28,6 +38,42 @@ import Database.Persist.Sql (ConnectionPool)
 
 
 
+
+-- | Read-only \"Environment\"
+data Env = Env
+  { envHostname        :: URIAuth -- ^ As bound
+  , envSMTPHost        :: URIAuthHost -- ^ Remotely accessible mailer
+  , envDevelopment     :: Maybe Development -- ^ Whether or not in \"development-mode\"
+  , envTls             :: Bool -- ^ Served over TLS
+  , envKeys            :: Keys -- ^ Parsed 'LocalCooking.Types.Keys.Keys' from @~/.localcooking/secret@
+  , envManagers        :: Managers -- ^ Outgoing HTTP client managers
+  , envDatabase        :: ConnectionPool -- ^ PostgreSQL connection pool
+  , envSalt            :: HashedPassword -- ^ Persisted, long-term password salt
+  , envTokenContexts   :: TokenContexts -- ^ TimeMap for decaying access tokens
+  }
+
+instance Default Env where
+  def = Env
+    { envHostname      = URIAuth Strict.Nothing Localhost (Strict.Just 3000)
+    , envSMTPHost      = Localhost
+    , envDevelopment   = def
+    , envTls           = False
+    , envKeys          = error "No access to secret keys in default environment"
+    , envManagers      = def
+    , envDatabase      = error "No database"
+    , envSalt          = error "No salt"
+    , envTokenContexts = def
+    }
+
+-- | Disconnects and cleans up safely
+releaseEnv :: Env -> IO ()
+releaseEnv Env{envDatabase} =
+  destroyAllResources envDatabase
+
+
+-- * Support Data Types
+
+-- | HTTP managers
 data Managers = Managers
   { managersFacebook  :: Manager
   , managersReCaptcha :: Manager
@@ -45,7 +91,7 @@ defManagers = do
     , managersReCaptcha
     }
 
-
+-- | Contains a site-wide \"cache buster\", so browsers don't use old assets
 data Development = Development
   { devCacheBuster :: Nonce
   }
@@ -66,6 +112,7 @@ isDevelopment Env{envDevelopment} = case envDevelopment of
   Just _ -> True
 
 
+-- | Access token contexts, for expiring references
 data TokenContexts = TokenContexts
   { tokenContextAuth :: AccessTokenContext AuthToken UserId
   }
@@ -79,36 +126,3 @@ defTokenContexts = do
   pure TokenContexts
     { tokenContextAuth
     }
-
-
-
-
-data Env = Env
-  { envHostname        :: URIAuth
-  , envSMTPHost        :: URIAuthHost
-  , envDevelopment     :: Maybe Development
-  , envTls             :: Bool
-  , envKeys            :: Keys
-  , envManagers        :: Managers
-  , envDatabase        :: ConnectionPool
-  , envSalt            :: HashedPassword
-  , envTokenContexts   :: TokenContexts
-  }
-
-instance Default Env where
-  def = Env
-    { envHostname      = URIAuth Strict.Nothing Localhost (Strict.Just 3000)
-    , envSMTPHost      = Localhost
-    , envDevelopment   = def
-    , envTls           = False
-    , envKeys          = error "No access to secret keys in default environment"
-    , envManagers      = def
-    , envDatabase      = error "No database"
-    , envSalt          = error "No salt"
-    , envTokenContexts = def
-    }
-
-
-releaseEnv :: Env -> IO ()
-releaseEnv Env{envDatabase} =
-  destroyAllResources envDatabase

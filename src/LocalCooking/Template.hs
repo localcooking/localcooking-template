@@ -9,6 +9,18 @@
   , RecordWildCards
   #-}
 
+{-|
+
+Module: Google.Keys
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+HTML Rendering tools
+
+-}
+
 module LocalCooking.Template where
 
 import           LocalCooking.Types (AppM)
@@ -18,12 +30,9 @@ import           LocalCooking.Types.Keys (Keys (..))
 import           LocalCooking.Server.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
 import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
-import           LocalCooking.Common.AccessToken.Auth (AuthToken)
 import           Facebook.App (Credentials (..))
 import           Facebook.State (FacebookLoginUnsavedFormData)
-import           Google.Keys (GoogleCredentials (..))
-import           Google.Analytics (googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..))
-import           Google.ReCaptcha (googleReCaptchaAssetURI)
+import           Google.Keys (GoogleCredentials (..), googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..), googleReCaptchaAssetURI)
 
 import           Lucid (renderBST, HtmlT, Attribute, content_, name_, meta_, httpEquiv_, charset_, link_, rel_, type_, href_, sizes_, script_, src_, async_)
 import           Lucid.Base (makeAttribute)
@@ -60,6 +69,7 @@ deriving instance Show URIAuth
 deriving instance Show URI
 
 
+-- | For raw HTML responses
 htmlLight :: Status
           -> HtmlT (AbsoluteUrlT AppM) a
           -> FileExtListenerT AppM ()
@@ -74,6 +84,7 @@ htmlLight s content = do
                   . mapHeaders ([("content-Type", "text/html")] ++)
 
 
+-- | Wrap some HTML into a 'masterPage' template, and issue it as a @text/html@ response.
 html :: LocalCookingSiteLinks siteLinks
      => LocalCookingColors
      -> PreliminaryAuthToken
@@ -84,11 +95,12 @@ html :: LocalCookingSiteLinks siteLinks
 html colors preliminary formData link = htmlLight status200 . mainTemplate colors preliminary formData link
 
 
+-- | Top-level scaffolding for the site
 masterPage :: LocalCookingSiteLinks siteLinks
-           => LocalCookingColors
-           -> PreliminaryAuthToken
-           -> Maybe FacebookLoginUnsavedFormData
-           -> siteLinks
+           => LocalCookingColors -- ^ Site colors
+           -> PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
+           -> Maybe FacebookLoginUnsavedFormData -- ^ Fetched from @?formData=...@ query parameter
+           -> siteLinks -- ^ Site link being represented
            -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
 masterPage LocalCookingColors{..} preliminary formData link =
   let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
@@ -134,6 +146,7 @@ masterPage LocalCookingColors{..} preliminary formData link =
                 , frontendEnvGoogleReCaptchaSiteKey = googleReCaptcha
                 , frontendEnvSalt = envSalt
                 , frontendEnvAuthToken = preliminary
+                , frontendEnvFormData = formData
                 }
           script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ inlineScripts frontendEnv
         }
@@ -177,6 +190,7 @@ mainTemplate colors preliminary formData = template . masterPage colors prelimin
 
 
 
+-- | Represents the resources used locally - @index.js@ and @index.css@.
 data WebAssetLinks
   = IndexCss -- FIXME Cache buster
   | IndexJs (Maybe Nonce)

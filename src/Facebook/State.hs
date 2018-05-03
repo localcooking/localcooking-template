@@ -5,6 +5,16 @@
   , UndecidableInstances
   #-}
 
+{-|
+
+Module: Facebook.State
+Copyright: (c) 2018 Local Cooking Inc.
+License: Proprietary
+Maintainer: athan.clark@localcooking.com
+Portability: GHC
+
+-}
+
 module Facebook.State where
 
 
@@ -18,12 +28,15 @@ import Path.Extended (ToLocation (toLocation), FromLocation (parseLocation), loc
 
 
 -- TODO other social login user id's as unsaved data
+-- | Unsaved form data intended to remain intact during a login redirection cycle.
 data FacebookLoginUnsavedFormData
-  = FacebookLoginUnsavedFormDataRegister
+  = -- | Register page
+    FacebookLoginUnsavedFormDataRegister
     { facebookLoginUnsavedFormDataRegisterEmail        :: Text
     , facebookLoginUnsavedFormDataRegisterEmailConfirm :: Text
     }
-  | FacebookLoginUnsavedFormDataSecurity
+  | -- | Security page
+    FacebookLoginUnsavedFormDataSecurity
     { facebookLoginUnsavedFormDataSecurityEmail        :: Text
     , facebookLoginUnsavedFormDataSecurityEmailConfirm :: Text
     }
@@ -51,9 +64,10 @@ instance FromJSON FacebookLoginUnsavedFormData where
 
 
 
+-- | Complete @{state: ...}@ parameters passed to-and-from a facebook login redirection cycle
 data FacebookLoginState siteLinks = FacebookLoginState
-  { facebookLoginStateOrigin   :: siteLinks
-  , facebookLoginStateFormData :: Maybe FacebookLoginUnsavedFormData
+  { facebookLoginStateOrigin   :: siteLinks -- ^ Origin
+  , facebookLoginStateFormData :: Maybe FacebookLoginUnsavedFormData -- ^ Potentially unsaved form data
   }
 
 instance ToLocation siteLinks => ToJSON (FacebookLoginState siteLinks) where
