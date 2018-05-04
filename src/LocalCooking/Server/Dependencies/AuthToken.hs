@@ -18,7 +18,7 @@ import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenInitIn (..), AccessTokenInitOut (..), AccessTokenDeltaOut (..), accessTokenServer)
 import LocalCooking.Database.Query.User (loginWithFB, login, LoginFailure)
 import Text.EmailAddress (EmailAddress)
-import Facebook.Types (FacebookLoginCode)
+import Facebook.Types (FacebookLoginCode, FacebookUserId)
 import Facebook.Return (FacebookLoginReturnError, handleFacebookLoginReturn)
 
 import Web.Dependencies.Sparrow (Server)
@@ -73,7 +73,7 @@ data AuthTokenFailure
   = FBLoginReturnBad Text Text
   | FBLoginReturnDenied Text
   | FBLoginReturnBadParse
-  | FBLoginReturnNoUser
+  | FBLoginReturnNoUser FacebookUserId
   | FBLoginReturnError FacebookLoginReturnError
   | AuthTokenLoginFailure LoginFailure
   deriving (Eq, Show, Generic)
@@ -83,7 +83,7 @@ instance Arbitrary AuthTokenFailure where
     [ FBLoginReturnBad <$> arbitrary <*> arbitrary
     , FBLoginReturnDenied <$> arbitrary
     , pure FBLoginReturnBadParse
-    , pure FBLoginReturnNoUser
+    , FBLoginReturnNoUser <$> arbitrary
     , AuthTokenLoginFailure <$> arbitrary
     , FBLoginReturnError <$> arbitrary
     ]
@@ -102,7 +102,9 @@ instance ToJSON AuthTokenFailure where
         ]
       ]
     FBLoginReturnBadParse -> String "bad-parse"
-    FBLoginReturnNoUser -> String "no-user"
+    FBLoginReturnNoUser x -> object
+      [ "no-user" .= x
+      ]
     FBLoginReturnError x -> object
       [ "fbLoginReturnError" .= x
       ]
@@ -121,10 +123,10 @@ instance FromJSON AuthTokenFailure where
             FBLoginReturnBad <$> o' .: "code" <*> o' .: "msg"
           failure = AuthTokenLoginFailure <$> o .: "loginFailure"
           fbLoginReturnError = FBLoginReturnError <$> o .: "fbLoginReturnError"
-      denied <|> bad <|> failure <|> fbLoginReturnError
+          noUser = FBLoginReturnNoUser <$> o .: "no-user"
+      denied <|> bad <|> failure <|> fbLoginReturnError <|> noUser
     String s
       | s == "bad-parse" -> pure FBLoginReturnBadParse
-      | s == "no-user" -> pure FBLoginReturnNoUser
       | otherwise -> fail
     _ -> fail
     where
@@ -236,7 +238,7 @@ authTokenServer initIn = do
               Env{envDatabase} <- ask
               mUserId <- liftIO (loginWithFB envDatabase fbToken fbUserId)
               case mUserId of
-                Nothing -> pure $ Left $ Just FBLoginReturnNoUser
+                Nothing -> pure $ Left $ Just $ FBLoginReturnNoUser fbUserId
                 Just userId -> do
                   authToken <- loginAuth userId
                   pure (Right authToken)

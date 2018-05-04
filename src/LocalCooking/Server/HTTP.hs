@@ -171,7 +171,7 @@ Disallow: /facebookLoginDeauthorize
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
                   mCont <- authTokenServer (AuthTokenInitInFacebookCode code)
                   case mCont of
-                    Nothing -> pure (Left FBLoginReturnNoUser, Just state)
+                    Nothing -> pure (Left FBLoginReturnBadParse, Just state)
                     Just ServerContinue{serverContinue} -> do
                       -- FIXME partial, could fail feasibly
                       ServerReturn{serverInitOut} <- serverContinue undefined
@@ -196,17 +196,22 @@ Disallow: /facebookLoginDeauthorize
               Just FacebookLoginState{..} ->
                 case eToken of
                   -- Redirect to register page, populate with fbUserId form data
-                  Left FBLoginReturnNoUser ->
+                  Left (FBLoginReturnNoUser fbUserId) ->
                     let loc = toLocation (registerLink :: siteLinks)
                     in  loc <&> ( "authToken"
                                 , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
                                 )
                             <&> ( "formData"
-                                , Just $ LBS8.toString $ Aeson.encode FacebookLoginUnsavedFormDataRegister
-                                  { facebookLoginUnsavedFormDataRegisterEmail = ""
-                                  , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
-                                  -- FIXME pack fbUserId as unsaved form data
-                                  }
+                                , Just $ LBS8.toString $ Aeson.encode $ case facebookLoginStateFormData of
+                                  Nothing -> FacebookLoginUnsavedFormDataRegister
+                                    { facebookLoginUnsavedFormDataRegisterEmail = ""
+                                    , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
+                                    , facebookLoginUnsavedFormDataRegisterFBUserId = Just fbUserId
+                                    }
+                                  Just formData -> formData
+                                    { facebookLoginUnsavedFormDataRegisterFBUserId = Just fbUserId
+                                    -- FIXME pack fbUserId as unsaved form data
+                                    }
                                 )
                   _ ->
                     let loc = toLocation facebookLoginStateOrigin

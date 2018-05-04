@@ -17,6 +17,7 @@ Portability: GHC
 
 module Facebook.State where
 
+import Facebook.Types (FacebookUserId)
 
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.=), (.:), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
@@ -34,6 +35,7 @@ data FacebookLoginUnsavedFormData
     FacebookLoginUnsavedFormDataRegister
     { facebookLoginUnsavedFormDataRegisterEmail        :: Text
     , facebookLoginUnsavedFormDataRegisterEmailConfirm :: Text
+    , facebookLoginUnsavedFormDataRegisterFBUserId     :: Maybe FacebookUserId
     }
   | -- | Security page
     FacebookLoginUnsavedFormDataSecurity
@@ -43,8 +45,8 @@ data FacebookLoginUnsavedFormData
 
 instance ToJSON FacebookLoginUnsavedFormData where
   toJSON x = case x of
-    FacebookLoginUnsavedFormDataRegister email emailConfirm -> object
-      ["register" .= object ["email" .= email, "emailConfirm" .= emailConfirm]]
+    FacebookLoginUnsavedFormDataRegister email emailConfirm fbUserId -> object
+      ["register" .= object ["email" .= email, "emailConfirm" .= emailConfirm, "fbUserId" .= fbUserId]]
     FacebookLoginUnsavedFormDataSecurity email emailConfirm -> object
       ["security" .= object ["email" .= email, "emailConfirm" .= emailConfirm]]
 
@@ -53,7 +55,7 @@ instance FromJSON FacebookLoginUnsavedFormData where
     Object o -> do
       let register = do
             o' <- o .: "register"
-            FacebookLoginUnsavedFormDataRegister <$> o' .: "email" <*> o' .: "emailConfirm"
+            FacebookLoginUnsavedFormDataRegister <$> o' .: "email" <*> o' .: "emailConfirm" <*> o' .: "fbUserId"
           security = do
             o' <- o .: "security"
             FacebookLoginUnsavedFormDataSecurity <$> o' .: "email" <*> o' .: "emailConfirm"
