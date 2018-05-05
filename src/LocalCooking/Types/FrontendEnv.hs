@@ -16,6 +16,7 @@ Portability: GHC
 module LocalCooking.Types.FrontendEnv where
 
 import LocalCooking.Common.Password (HashedPassword)
+import LocalCooking.Common.AccessToken.Email (EmailToken)
 import LocalCooking.Server.Dependencies.AuthToken (PreliminaryAuthToken)
 import Facebook.App (FacebookClientId)
 import Facebook.State (FacebookLoginUnsavedFormData)
@@ -29,6 +30,7 @@ data FrontendEnv = FrontendEnv
   { frontendEnvDevelopment :: Bool
   , frontendEnvFacebookClientID :: FacebookClientId -- ^ For Facebook login
   , frontendEnvGoogleReCaptchaSiteKey :: ReCaptchaSiteKey -- ^ Public ReCaptcha API key
+  , frontendEnvEmailToken :: Maybe EmailToken
   , frontendEnvAuthToken :: PreliminaryAuthToken -- ^ Parsed from @?authToken=...@ query string
   , frontendEnvFormData :: Maybe FacebookLoginUnsavedFormData -- ^ Parsed from @?authToken=...@ query string
   , frontendEnvSalt :: HashedPassword -- ^ Public, static, 32-bit password salt
@@ -40,6 +42,7 @@ instance ToJSON FrontendEnv where
       { frontendEnvDevelopment
       , frontendEnvFacebookClientID
       , frontendEnvGoogleReCaptchaSiteKey
+      , frontendEnvEmailToken
       , frontendEnvAuthToken
       , frontendEnvFormData
       , frontendEnvSalt
@@ -47,6 +50,7 @@ instance ToJSON FrontendEnv where
     [ "development" .= frontendEnvDevelopment
     , "facebookClientID" .= frontendEnvFacebookClientID
     , "googleReCaptchaSiteKey" .= frontendEnvGoogleReCaptchaSiteKey
+    , "emailToken" .= frontendEnvEmailToken
     , "authToken" .= frontendEnvAuthToken
     , "formData" .= frontendEnvFormData
     , "salt" .= frontendEnvSalt

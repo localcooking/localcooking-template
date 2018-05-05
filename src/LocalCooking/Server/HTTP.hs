@@ -94,7 +94,7 @@ router
             formData = case join $ lookup "formData" $ queryString req of
               Nothing -> Nothing
               Just json -> Aeson.decode (LBS.fromStrict json)
-        in  (action $ get $ html colors preliminary formData link "") app req resp
+        in  (action $ get $ html colors Nothing preliminary formData link "") app req resp
 
   -- main routes
   matchHere (handleAuthToken rootLink)
@@ -138,6 +138,24 @@ Disallow: /facebookLoginDeauthorize
                   action $ get $ bytestring JavaScript $ LBS.fromStrict frontend
               | otherwise -> fail "Wrong cache buster!" -- FIXME make cache buster generic
     mid app req resp
+
+  match (l_ "emailConfirm" </> o_) $ \app req resp -> do
+    let redirectUri = URI (Strict.Just $ if envTls then "https" else "http")
+                          True
+                          envHostname
+                          []
+                          []
+                          Strict.Nothing
+        def = resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
+    case join $ lookup "emailToken" $ queryString req of
+      Nothing -> def
+      Just json -> case Aeson.decode (LBS.fromStrict json) of
+        Nothing -> def
+        Just emailToken ->
+          (action $ get $ html colors
+            (Just emailToken)
+            (PreliminaryAuthToken Nothing)
+            Nothing (rootLink :: siteLinks) "") app req resp
 
   -- TODO handle authenticated linking
   match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do

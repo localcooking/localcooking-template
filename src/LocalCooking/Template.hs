@@ -30,6 +30,7 @@ import           LocalCooking.Types.Keys (Keys (..))
 import           LocalCooking.Server.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
 import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
+import           LocalCooking.Common.AccessToken.Email (EmailToken)
 import           Facebook.App (Credentials (..))
 import           Facebook.State (FacebookLoginUnsavedFormData)
 import           Google.Keys (GoogleCredentials (..), googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..), googleReCaptchaAssetURI)
@@ -87,22 +88,25 @@ htmlLight s content = do
 -- | Wrap some HTML into a 'masterPage' template, and issue it as a @text/html@ response.
 html :: LocalCookingSiteLinks siteLinks
      => LocalCookingColors
+     -> Maybe EmailToken
      -> PreliminaryAuthToken
      -> Maybe FacebookLoginUnsavedFormData
      -> siteLinks
      -> HtmlT (AbsoluteUrlT AppM) ()
      -> FileExtListenerT AppM ()
-html colors preliminary formData link = htmlLight status200 . mainTemplate colors preliminary formData link
+html colors emailToken preliminary formData link =
+  htmlLight status200 . mainTemplate colors emailToken preliminary formData link
 
 
 -- | Top-level scaffolding for the site
 masterPage :: LocalCookingSiteLinks siteLinks
            => LocalCookingColors -- ^ Site colors
+           -> Maybe EmailToken -- ^ Fetched from @?emailToken=...@ query parameter - email confirmation
            -> PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
            -> Maybe FacebookLoginUnsavedFormData -- ^ Fetched from @?formData=...@ query parameter
            -> siteLinks -- ^ Site link being represented
            -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
-masterPage LocalCookingColors{..} preliminary formData link =
+masterPage LocalCookingColors{..} emailToken preliminary formData link =
   let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
       page = def
   in  page
@@ -145,6 +149,7 @@ masterPage LocalCookingColors{..} preliminary formData link =
                 , frontendEnvFacebookClientID = clientId
                 , frontendEnvGoogleReCaptchaSiteKey = googleReCaptcha
                 , frontendEnvSalt = envSalt
+                , frontendEnvEmailToken = emailToken
                 , frontendEnvAuthToken = preliminary
                 , frontendEnvFormData = formData
                 }
@@ -181,12 +186,14 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 -- | Inject some HTML into the @<body>@ tag of our template
 mainTemplate :: LocalCookingSiteLinks siteLinks
              => LocalCookingColors
+             -> Maybe EmailToken
              -> PreliminaryAuthToken
              -> Maybe FacebookLoginUnsavedFormData
              -> siteLinks
              -> HtmlT (AbsoluteUrlT AppM) ()
              -> HtmlT (AbsoluteUrlT AppM) ()
-mainTemplate colors preliminary formData = template . masterPage colors preliminary formData
+mainTemplate colors emailToken preliminary formData =
+  template . masterPage colors emailToken preliminary formData
 
 
 
