@@ -5,7 +5,7 @@
 
 {-|
 
-Module: LocalCooking.Server.Dependencies.UserEmail
+Module: LocalCooking.Server.Dependencies.UserRoles
 Copyright: (c) 2018 Local Cooking Inc.
 License: Proprietary
 Maintainer: athan.clark@localcooking.com
@@ -13,18 +13,18 @@ Portability: GHC
 
 -}
 
-module LocalCooking.Server.Dependencies.UserEmail where
+module LocalCooking.Server.Dependencies.UserRoles where
 
 import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..))
 import LocalCooking.Auth (usersAuthToken)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
-import LocalCooking.Database.Query.User (getEmail)
+import LocalCooking.Common.User.Role (UserRole)
+import LocalCooking.Database.Query.User (getRoles)
 import LocalCooking.Server.Dependencies.AccessToken.Generic (AuthInitIn (..), AuthInitOut (..))
 
 import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)
 
-import Text.EmailAddress (EmailAddress)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), object, (.=), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
 import Data.Aeson.JSONUnit (JSONUnit (..))
@@ -32,24 +32,24 @@ import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
 
-type UserEmailInitIn = AuthInitIn AuthToken JSONUnit
+type UserRolesInitIn = AuthInitIn AuthToken JSONUnit
 
-type UserEmailInitOut = AuthInitOut EmailAddress
+type UserRolesInitOut = AuthInitOut [UserRole]
 
 
-userEmailServer :: Server AppM UserEmailInitIn
-                               UserEmailInitOut
+userRolesServer :: Server AppM UserRolesInitIn
+                               UserRolesInitOut
                                JSONVoid
                                JSONVoid
-userEmailServer = staticServer $ \(AuthInitIn authToken JSONUnit) -> do
+userRolesServer = staticServer $ \(AuthInitIn authToken JSONUnit) -> do
   Env{envDatabase} <- ask
 
-  mEmail <- do
+  mRole <- do
     mUserId <- usersAuthToken authToken
     case mUserId of
       Nothing -> pure Nothing
-      Just userId -> liftIO (getEmail envDatabase userId)
+      Just userId -> Just <$> liftIO (getRoles envDatabase userId)
 
-  case mEmail of
+  case mRole of
     Nothing -> pure (Just AuthInitOutNoAuth)
-    Just email -> pure $ Just $ AuthInitOut email
+    Just role -> pure $ Just $ AuthInitOut role

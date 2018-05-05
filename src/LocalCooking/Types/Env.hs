@@ -22,6 +22,7 @@ import LocalCooking.Server.Dependencies.AccessToken.Generic (AccessTokenContext,
 import LocalCooking.Types.Keys (Keys)
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
+import LocalCooking.Common.AccessToken.Email (EmailToken)
 import LocalCooking.Database.Schema.User (UserId)
 
 import Data.URI.Auth (URIAuth (..))
@@ -115,6 +116,7 @@ isDevelopment Env{envDevelopment} = case envDevelopment of
 -- | Access token contexts, for expiring references
 data TokenContexts = TokenContexts
   { tokenContextAuth :: AccessTokenContext AuthToken UserId
+  , tokenContextEmail :: AccessTokenContext EmailToken UserId
   }
 
 instance Default TokenContexts where
@@ -123,6 +125,8 @@ instance Default TokenContexts where
 defTokenContexts :: STM TokenContexts
 defTokenContexts = do
   tokenContextAuth <- newAccessTokenContext
+  tokenContextEmail <- newAccessTokenContext
   pure TokenContexts
     { tokenContextAuth
+    , tokenContextEmail
     }

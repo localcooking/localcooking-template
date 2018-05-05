@@ -17,6 +17,7 @@ module LocalCooking.Server.Dependencies where
 import LocalCooking.Server.Dependencies.AuthToken (authTokenServer)
 import LocalCooking.Server.Dependencies.Register (registerServer)
 import LocalCooking.Server.Dependencies.UserEmail (userEmailServer)
+import LocalCooking.Server.Dependencies.UserRoles (userRolesServer)
 import LocalCooking.Server.Dependencies.Security (securityServer)
 import LocalCooking.Server.Dependencies.PasswordVerify (passwordVerifyServer)
 import LocalCooking.Types (AppM)
@@ -37,6 +38,8 @@ dependencies deps = do
       =<< unpackServer (Topic ["template", "register"]) registerServer
     match (l_ "userEmail" </> o_)
       =<< unpackServer (Topic ["template", "userEmail"]) userEmailServer
+    match (l_ "userRoles" </> o_)
+      =<< unpackServer (Topic ["template", "userRoles"]) userRolesServer
     match (l_ "security" </> o_)
       =<< unpackServer (Topic ["template", "security"]) securityServer
     match (l_ "passwordVerify" </> o_)

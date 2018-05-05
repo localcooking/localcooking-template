@@ -34,7 +34,6 @@ import GHC.Generics (Generic)
 
 
 
--- TODO Google ReCaptcha
 data AuthTokenInitIn
   = AuthTokenInitInLogin
     { authTokenInitInLoginEmail :: EmailAddress
