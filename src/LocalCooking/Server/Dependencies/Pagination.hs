@@ -4,6 +4,8 @@
 
 module LocalCooking.Server.Dependencies.Pagination where
 
+import LocalCooking.Types (AppM)
+
 import Data.HashSet (HashSet)
 import Database.Persist.Class (PersistEntity (Key, EntityField))
 import qualified Database.Persist.Types as Persist
@@ -50,8 +52,12 @@ type ObservationScope record =
   HashSet (Key record)
 
 
-paginationServer ::
-                    Server m (PaginationInitIn fieldLabel) (PaginationInitOut a) (PaginationDeltaIn fieldLabel) (PaginationDeltaOut a)
-paginationServer (PaginationInitIn PaginationArgs{..}) =
-  undefined
+paginationServer :: Server AppM
+                      (PaginationInitIn (EntityField record typ))
+                      (PaginationInitOut record)
+                      (PaginationDeltaIn (EntityField record typ))
+                      (PaginationDeltaOut record)
+paginationServer (PaginationInitIn pageArgs) = do
+  Env{envDatabase} <- ask
+  ents <- runSqlPool envDatabase (selectList [] (paginationArgsToQuery pageArgs))
   
