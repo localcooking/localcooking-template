@@ -75,6 +75,7 @@ dependencies:
 - unordered-containers
 - urlpath >= 9.0.0
 - utf8-string
+- uuid
 - wai
 - wai-middleware-content-type >= 0.6.1.2
 - wai-transformers >= 0.1.0

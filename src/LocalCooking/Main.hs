@@ -25,8 +25,12 @@ import LocalCooking.Types (runAppM)
 import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts, releaseEnv)
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
-import qualified LocalCooking.Database.Schema.Facebook as Facebook
-import qualified LocalCooking.Database.Schema.User as User
+import qualified LocalCooking.Database.Schema.Facebook.AccessToken as FacebookAccess
+import qualified LocalCooking.Database.Schema.Facebook.UserDetails as FacebookDetails
+import qualified LocalCooking.Database.Schema.User.Password as UserPassword
+import qualified LocalCooking.Database.Schema.User.Email as UserEmail
+import qualified LocalCooking.Database.Schema.User.Pending as UserPending
+import qualified LocalCooking.Database.Schema.User.Role as UserRole
 import qualified LocalCooking.Database.Schema.Salt as Salt
 
 import Options.Applicative (Parser, execParser, info, helper, fullDesc, progDesc, header, strOption, option, switch, auto, long, help, value, showDefault)
@@ -177,8 +181,12 @@ mkEnv
     runStderrLoggingT (createPostgresqlPool connStr 10)
 
   flip runSqlPool envDatabase $ do
-    runMigration Facebook.migrateAll
-    runMigration User.migrateAll
+    runMigration FacebookAccess.migrateAll
+    runMigration FacebookDetails.migrateAll
+    runMigration UserPassword.migrateAll
+    runMigration UserEmail.migrateAll
+    runMigration UserPending.migrateAll
+    runMigration UserRole.migrateAll
     runMigration Salt.migrateAll
 
   envSalt <- getPasswordSalt envDatabase
