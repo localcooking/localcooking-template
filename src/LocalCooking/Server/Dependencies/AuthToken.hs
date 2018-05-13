@@ -4,6 +4,7 @@
   , OverloadedLists
   , MultiParamTypeClasses
   , DeriveGeneric
+  , FlexibleContexts
   , GeneralizedNewtypeDeriving
   #-}
 
@@ -25,7 +26,8 @@ import Web.Dependencies.Sparrow (Server)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), (.:), Value (..))
 import Data.Aeson.Types (typeMismatch)
 import Data.Text (Text)
-import Control.Applicative ((<|>))
+import Data.Insert.Class (Insertable)
+import Control.Applicative (Alternative, (<|>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Control.Newtype (Newtype (unpack, pack))
@@ -196,10 +198,12 @@ instance AccessTokenDeltaOut AuthTokenDeltaOut where
 
 
 
-authTokenServer :: Server AppM AuthTokenInitIn
-                               AuthTokenInitOut
-                               AuthTokenDeltaIn
-                               AuthTokenDeltaOut
+authTokenServer :: Alternative f
+                => Insertable f AppM
+                => Server AppM f AuthTokenInitIn
+                                 AuthTokenInitOut
+                                 AuthTokenDeltaIn
+                                 AuthTokenDeltaOut
 authTokenServer initIn = do
   Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
 

@@ -5,6 +5,7 @@
   , DataKinds
   , RankNTypes
   , RecordWildCards
+  , FlexibleContexts
   #-}
 
 {-|
@@ -35,7 +36,9 @@ import Network.HTTP.Types (status404)
 import Data.Singleton.Class (runSingleton)
 import qualified Data.ByteString as BS
 import Data.Proxy (Proxy (..))
+import Data.Insert.Class (Insertable)
 import Path.Extended (FromLocation, ToLocation)
+import Control.Applicative (Alternative)
 import Control.Monad (void)
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -44,24 +47,27 @@ import Control.Concurrent.Async (async)
 
 
 -- | Top-level Local Cooking server template arguments
-data LocalCookingArgs siteLinks sec = LocalCookingArgs
+data LocalCookingArgs siteLinks sec f = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString -- ^ Raw frontend javascript
   , localCookingArgsFrontendMin :: BS.ByteString -- ^ Raw minified frontend javascript
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)] -- ^ Favicon directory asset contents
   , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT AppM)
                                 -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Casual HTTP links
-  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) AppM () -- ^ Casual Sparrow dependencies
+  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) f AppM () -- ^ Casual Sparrow dependencies
   , localCookingArgsColors      :: LocalCookingColors -- ^ Site-wide colors
   }
 
 
 -- | Majority of business logic
-server :: forall sec siteLinks
+server :: forall sec siteLinks f
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
        => ToLocation siteLinks
+       => Alternative f
+       => Insertable f AppM
+       => Foldable f
        => Int -- ^ Port to bind to
-       -> LocalCookingArgs siteLinks sec
+       -> LocalCookingArgs siteLinks sec f
        -> AppM ()
 server port LocalCookingArgs{..} = do
   -- auth token expiring checker - FIXME use a cassandra database instead probably

@@ -17,7 +17,7 @@ import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)
 import Text.EmailAddress (EmailAddress)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), object, (.=), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
-import Control.Applicative ((<|>))
+import Control.Applicative (Alternative, (<|>))
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
@@ -67,10 +67,11 @@ instance ToJSON PasswordVerifyInitOut where
     PasswordVerifyInitOutFailure -> String "failure"
 
 
-passwordVerifyServer :: Server AppM PasswordVerifyInitIn
-                               PasswordVerifyInitOut
-                               JSONVoid
-                               JSONVoid
+passwordVerifyServer :: Alternative f
+                     => Server AppM f PasswordVerifyInitIn
+                                      PasswordVerifyInitOut
+                                      JSONVoid
+                                      JSONVoid
 passwordVerifyServer = staticServer $ \initIn -> do
   Env{envDatabase} <- ask
 

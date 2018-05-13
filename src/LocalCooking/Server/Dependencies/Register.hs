@@ -23,6 +23,7 @@ import Data.URI.Auth.Host (printURIAuthHost)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Control.Applicative (Alternative)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (ask)
 import Control.Logging (log')
@@ -65,10 +66,11 @@ instance ToJSON RegisterInitOut where
 
 
 
-registerServer :: Server AppM RegisterInitIn
-                              RegisterInitOut
-                              JSONVoid
-                              JSONVoid
+registerServer :: Alternative f
+               => Server AppM f RegisterInitIn
+                                RegisterInitOut
+                                JSONVoid
+                                JSONVoid
 registerServer = staticServer $ \RegisterInitIn{..} -> do
   liftIO $ log' "running..."
 

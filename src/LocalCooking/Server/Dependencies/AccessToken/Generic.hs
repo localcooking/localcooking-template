@@ -31,12 +31,14 @@ import qualified Data.TimeMap as TimeMap
 import Data.Singleton.Class (Extractable (runSingleton))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object, Value (String, Object))
 import Data.Aeson.Types (typeMismatch)
+import Data.Insert.Class (Insertable (insert))
+import Control.Applicative (Alternative (empty))
 import Control.Monad (forM_, forever)
 import qualified Control.Monad.Trans.Control.Aligned as Aligned
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async)
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, newTVarIO)
 import Control.Concurrent.STM.TMapMVar.Hash (TMapMVar, newTMapMVar)
 import qualified Control.Concurrent.STM.TMapMVar.Hash as TMapMVar
 import Control.Newtype (Newtype (pack, unpack))
@@ -128,10 +130,12 @@ expireThread expiration AccessTokenContext{..} = forever $ do
 
 
 -- | Create a Sparrow dependency for the access token implementation
-accessTokenServer :: forall k a initIn initOut err deltaIn deltaOut m stM
+accessTokenServer :: forall k a initIn initOut err deltaIn deltaOut f m stM
                    . Newtype k AccessToken
                   => Hashable k
                   => Eq k
+                  => Insertable f m
+                  => Alternative f
                   => AccessTokenInitIn initIn
                   => AccessTokenInitOut initOut err
                   => AccessTokenDeltaOut deltaOut
@@ -142,14 +146,14 @@ accessTokenServer :: forall k a initIn initOut err deltaIn deltaOut m stM
                   -> (initIn -> m (Either (Maybe err) k)) -- ^ obtain init auth token
                   -> (m () -> deltaIn -> m ()) -- ^ revocation reactions
                   -> (m () -> m ()) -- ^ async revocations
-                  -> Server m initIn initOut deltaIn deltaOut
+                  -> Server m f initIn initOut deltaIn deltaOut
 accessTokenServer
   context@AccessTokenContext{accessTokenContextExpire}
   getAccessToken
   revokeOnDeltaIn
   revokeOnOpen
   = \initIn -> do
-  let serverReturnSuccess :: k -> ServerContinue m initOut deltaIn deltaOut
+  let serverReturnSuccess :: k -> ServerContinue m f initOut deltaIn deltaOut
       serverReturnSuccess accessToken =
         let revokeAccess' serverReject = do
               liftIO $ atomically $ revokeAccess context accessToken
@@ -164,7 +168,9 @@ accessTokenServer
                     runSingleton <$> runInBase (serverSendCurrent makeRevoke)
                   onOpenThread <- Aligned.liftBaseWith $ \runInBase -> async $
                     runSingleton <$> runInBase (revokeOnOpen (revokeAccess' serverDeltaReject))
-                  pure [revokeThread,onOpenThread]
+                  threads <- insert onOpenThread empty >>= insert revokeThread
+                  threadsRef <- liftIO (newTVarIO threads)
+                  pure threadsRef
               , serverOnReceive = \ServerArgs{serverDeltaReject} deltaIn ->
                   revokeOnDeltaIn (revokeAccess' serverDeltaReject) deltaIn
               }
@@ -188,7 +194,8 @@ accessTokenServer
               { serverInitOut = makeFailure err
               , serverOnOpen = \ServerArgs{serverDeltaReject} -> do
                   serverDeltaReject
-                  pure []
+                  threadsRef <- liftIO (newTVarIO empty)
+                  pure threadsRef
               , serverOnReceive = \_ _ -> pure ()
               }
             }

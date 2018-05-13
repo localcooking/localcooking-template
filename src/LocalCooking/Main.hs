@@ -2,6 +2,7 @@
     OverloadedStrings
   , OverloadedLists
   , NamedFieldPuns
+  , FlexibleContexts
   #-}
 
 {-|
@@ -21,7 +22,7 @@ This is the top-level entry point for a Local Cooking server - use the
 module LocalCooking.Main where
 
 import LocalCooking.Server (LocalCookingArgs, server)
-import LocalCooking.Types (runAppM)
+import LocalCooking.Types (AppM, runAppM)
 import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts, releaseEnv)
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
@@ -44,6 +45,8 @@ import qualified Data.ByteString.UTF8 as BS8
 import Data.Monoid ((<>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Strict.Maybe as Strict
+import Data.Insert.Class (Insertable)
+import Control.Applicative (Alternative)
 import Control.Monad (unless)
 import Control.Concurrent.STM (atomically)
 import Control.Logging (errorL, withStderrLogging)
@@ -214,8 +217,11 @@ mkEnv
 defaultMain :: LocalCookingSiteLinks siteLinks
             => FromLocation siteLinks
             => ToLocation siteLinks
+            => Alternative f
+            => Insertable f AppM
+            => Foldable f
             => String -- ^ CLI Invocation heading - i.e. \"@Local Cooking Farms - farm.localcooking.com daemon@\"
-            -> LocalCookingArgs siteLinks sec -- ^ Arguments
+            -> LocalCookingArgs siteLinks sec f -- ^ Arguments
             -> IO ()
 defaultMain head' lcArgs = do
   username <- getEnv "USER"

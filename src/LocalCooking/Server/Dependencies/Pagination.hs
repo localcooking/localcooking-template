@@ -4,6 +4,8 @@
   , GADTs
   , FlexibleContexts
   , GeneralizedNewtypeDeriving
+  , RankNTypes
+  , ScopedTypeVariables
   #-}
 
 module LocalCooking.Server.Dependencies.Pagination where
@@ -16,14 +18,20 @@ import Data.UUID.V4 (nextRandom)
 import Data.Hashable (Hashable)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
-import Control.Monad (forM_)
+import Data.Singleton.Class (Extractable (..))
+import Data.Insert.Class (Insertable)
+import qualified Data.Insert.Class as Insert
+import Control.Applicative (Alternative (empty))
+import Control.Monad (forM_, forM, forever)
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Concurrent.STM (STM, atomically, TVar, readTVar, writeTVar, modifyTVar, TChan, writeTChan)
+import qualified Control.Monad.Trans.Control.Aligned as Aligned
+import Control.Concurrent.Async (Async, cancel, async)
+import Control.Concurrent.STM (STM, atomically, TVar, newTVarIO, readTVar, writeTVar, modifyTVar, TChan, newTChanIO, writeTChan, readTChan)
 import Database.Persist.Sql (runSqlPool, SqlBackend)
 import Database.Persist.Class (PersistEntity (Key, EntityField, PersistEntityBackend), selectList, insert, replace, delete)
 import qualified Database.Persist.Types as Persist
-import Web.Dependencies.Sparrow (Server)
+import Web.Dependencies.Sparrow (Server, ServerArgs (..), ServerContinue (..), ServerReturn (..))
 
 
 data SortOrdering = Asc | Dsc
@@ -74,13 +82,13 @@ data ListenerMsg record
 
 type Listeners record = HashMap (Key record) (HashMap ListenerId (TChan (ListenerMsg record)))
 
-insertListener :: Eq (Key record)
-               => Hashable (Key record)
-               => TVar (Listeners record)
-               -> Key record
-               -> TChan (ListenerMsg record)
-               -> IO ListenerId
-insertListener listeners recordKey chan = do
+registerListener :: Eq (Key record)
+                 => Hashable (Key record)
+                 => TVar (Listeners record)
+                 -> Key record
+                 -> TChan (ListenerMsg record)
+                 -> IO ListenerId
+registerListener listeners recordKey chan = do
   key <- ListenerId <$> nextRandom
   atomically $ modifyTVar listeners $
     HashMap.alter
@@ -88,13 +96,13 @@ insertListener listeners recordKey chan = do
       recordKey
   pure key
 
-deleteListener :: Eq (Key record)
-               => Hashable (Key record)
-               => TVar (Listeners record)
-               -> Key record
-               -> ListenerId
-               -> STM ()
-deleteListener listeners recordKey key =
+unregisterListener :: Eq (Key record)
+                   => Hashable (Key record)
+                   => TVar (Listeners record)
+                   -> Key record
+                   -> ListenerId
+                   -> STM ()
+unregisterListener listeners recordKey key =
   modifyTVar listeners $
     HashMap.update
       (prune . HashMap.delete key)
@@ -155,17 +163,124 @@ deleteRecord listeners recordKey = do
     writeTVar listeners (HashMap.delete recordKey ls)
 
 
-paginationServer :: PersistEntity record
+paginationServer :: forall record typ f
+                  . PersistEntity record
+                 => Hashable (Key record)
+                 => Eq (Key record)
+                 => Insertable f AppM
+                 => Alternative f
+                 => Foldable f
                  => SqlBackend ~ PersistEntityBackend record
                  => TVar (Listeners record)
-                 -> Server AppM
+                 -> Server AppM f
                       (PaginationInitIn (EntityField record typ))
                       (PaginationInitOut record)
                       (PaginationDeltaIn (EntityField record typ))
                       (PaginationDeltaOut record)
 paginationServer listeners (PaginationInitIn pageArgs) = do
+  ( argsRef :: TVar (PaginationArgs (EntityField record typ))
+    ) <- liftIO (newTVarIO pageArgs)
   Env{envDatabase} <- ask
-  ents <- flip runSqlPool envDatabase (selectList [] (paginationArgsToQuery pageArgs))
-  forM_ ents $ \(Persist.Entity key value) ->
-    undefined
-  undefined
+  ( threadsRef :: TVar (f (Async ()))
+    ) <- liftIO (newTVarIO empty)
+
+  let getRecords :: PaginationArgs (EntityField record typ) -> AppM ([record],[Key record])
+      getRecords as = do
+        ents <- flip runSqlPool envDatabase (selectList [] (paginationArgsToQuery pageArgs))
+        unzip <$> forM ents (\(Persist.Entity key value) -> pure (value,key))
+
+      bindListeners :: ServerArgs AppM (PaginationDeltaOut record) -> [Key record] -> AppM ()
+      bindListeners serverArgs@ServerArgs{serverSendCurrent} ks = forM_ ks $ \key -> do
+        chan <- liftIO newTChanIO
+        listenerId <- liftIO (registerListener listeners key chan)
+        thread <- Aligned.liftBaseWith $ \runInBase -> async $ fmap runSingleton $ runInBase $ forever $ do
+          x <- liftIO $ atomically $ readTChan chan
+          case x of
+            Update y -> serverSendCurrent (PaginationUpdate y)
+            Delete -> do
+              args <- liftIO $ atomically $ readTVar argsRef
+              (xs,ks') <- getRecords args
+              threadsOld <- liftIO $ atomically $ do
+                x <- readTVar threadsRef
+                writeTVar threadsRef empty
+                pure x
+              bindListeners serverArgs ks'
+              serverSendCurrent (PaginationFlush xs)
+              liftIO (forM_ threadsOld cancel)
+
+        threadsOld <- liftIO $ atomically $ readTVar threadsRef
+        threads' <- Insert.insert thread threadsOld
+        liftIO $ atomically $ writeTVar threadsRef threads'
+
+  (xs,ks) <- getRecords pageArgs
+
+  pure $ Just ServerContinue
+    { serverContinue = \broadcast -> pure ServerReturn
+      { serverInitOut = PaginationInitOut xs
+      , serverOnOpen = \send -> do
+
+        bindListeners send ks
+
+        pure threadsRef
+
+      , serverOnReceive = \send@ServerArgs{serverSendCurrent} x -> case x of
+        PaginationChangeSize size -> do
+          args <- do
+            x <- liftIO $ atomically $ readTVar argsRef
+            let args' = x
+                  { paginationArgsPageSize = size
+                  }
+            liftIO $ atomically $ writeTVar argsRef args'
+            pure args'
+
+          (xs,ks) <- getRecords args
+          threadsOld <- liftIO $ atomically $ do
+            x <- readTVar threadsRef
+            writeTVar threadsRef empty
+            pure x
+          bindListeners send ks
+          serverSendCurrent (PaginationFlush xs)
+          liftIO (forM_ threadsOld cancel)
+        PaginationChangeIndex idx -> do
+          args <- do
+            x <- liftIO $ atomically $ readTVar argsRef
+            let args' = x
+                  { paginationArgsPageIndex = idx
+                  }
+            liftIO $ atomically $ writeTVar argsRef args'
+            pure args'
+
+          (xs,ks) <- getRecords args
+          threadsOld <- liftIO $ atomically $ do
+            x <- readTVar threadsRef
+            writeTVar threadsRef empty
+            pure x
+          bindListeners send ks
+          serverSendCurrent (PaginationFlush xs)
+          liftIO (forM_ threadsOld cancel)
+        PaginationResort field ordering -> do
+          args <- do
+            x <- liftIO $ atomically $ readTVar argsRef
+            let args' = x
+                  { paginationArgsField = field
+                  , paginationArgsFieldOrdering = ordering
+                  }
+            liftIO $ atomically $ writeTVar argsRef args'
+            pure args'
+
+          (xs,ks) <- getRecords args
+          threadsOld <- liftIO $ atomically $ do
+            x <- readTVar threadsRef
+            writeTVar threadsRef empty
+            pure x
+          bindListeners send ks
+          serverSendCurrent (PaginationFlush xs)
+          liftIO (forM_ threadsOld cancel)
+      }
+    , serverOnUnsubscribe = do
+      threadsOld <- liftIO $ atomically $ do
+        x <- readTVar threadsRef
+        writeTVar threadsRef empty
+        pure x
+      liftIO (forM_ threadsOld cancel)
+    }

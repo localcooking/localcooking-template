@@ -28,6 +28,7 @@ import Text.EmailAddress (EmailAddress)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), object, (.=), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
 import Data.Aeson.JSONUnit (JSONUnit (..))
+import Control.Applicative (Alternative)
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
@@ -37,10 +38,11 @@ type UserEmailInitIn = AuthInitIn AuthToken JSONUnit
 type UserEmailInitOut = AuthInitOut EmailAddress
 
 
-userEmailServer :: Server AppM UserEmailInitIn
-                               UserEmailInitOut
-                               JSONVoid
-                               JSONVoid
+userEmailServer :: Alternative f
+                => Server AppM f UserEmailInitIn
+                                 UserEmailInitOut
+                                 JSONVoid
+                                 JSONVoid
 userEmailServer = staticServer $ \(AuthInitIn authToken JSONUnit) -> do
   Env{envDatabase} <- ask
 

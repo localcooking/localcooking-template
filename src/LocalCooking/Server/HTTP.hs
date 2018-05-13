@@ -6,6 +6,9 @@
   , DataKinds
   , QuasiQuotes
   , RecordWildCards
+  , PartialTypeSignatures
+  , Rank2Types
+  , FlexibleContexts
   #-}
 
 {-|
@@ -187,7 +190,8 @@ Disallow: /facebookLoginDeauthorize
                 -- Successfully fetched the fbCode and FacebookState from query string
                 Right (code, state) -> do
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
-                  mCont <- authTokenServer (AuthTokenInitInFacebookCode code)
+                  ( mCont :: Maybe (ServerContinue AppM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
+                    ) <- authTokenServer (AuthTokenInitInFacebookCode code)
                   case mCont of
                     Nothing -> pure (Left FBLoginReturnBadParse, Just state)
                     Just ServerContinue{serverContinue} -> do

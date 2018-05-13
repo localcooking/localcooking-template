@@ -18,6 +18,7 @@ import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)
 import Text.EmailAddress (EmailAddress)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), object, (.=), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
+import Control.Applicative (Alternative)
 import Control.Monad.Reader (ask)
 import Control.Monad.IO.Class (liftIO)
 
@@ -58,10 +59,11 @@ instance ToJSON SecurityInitOut' where
 type SecurityInitOut = AuthInitOut SecurityInitOut'
 
 
-securityServer :: Server AppM SecurityInitIn
-                              SecurityInitOut
-                              JSONVoid
-                              JSONVoid
+securityServer :: Alternative f
+               => Server AppM f SecurityInitIn
+                                SecurityInitOut
+                                JSONVoid
+                                JSONVoid
 securityServer = staticServer $ \(AuthInitIn authToken (SecurityInitIn' email newPassword oldPassword)) -> do
   Env{envDatabase} <- ask
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE
     OverloadedStrings
+  , FlexibleContexts
   #-}
 
 {-|
@@ -25,11 +26,16 @@ import LocalCooking.Types (AppM)
 import Web.Routes.Nested (l_, o_, (</>))
 import Web.Dependencies.Sparrow (Topic (..), unpackServer, SparrowServerT, match, matchGroup)
 import Network.Wai.Trans (MiddlewareT)
+import Data.Insert.Class (Insertable)
+import Control.Applicative (Alternative)
 
 
 -- | Enterprise-wide dependencies - auth tokens, registration, user details, etc.
-dependencies :: SparrowServerT (MiddlewareT AppM) AppM () -- ^ Extra deps
-             -> SparrowServerT (MiddlewareT AppM) AppM ()
+dependencies :: Alternative f
+             => Insertable f AppM
+             => Foldable f
+             => SparrowServerT (MiddlewareT AppM) f AppM () -- ^ Extra deps
+             -> SparrowServerT (MiddlewareT AppM) f AppM ()
 dependencies deps = do
   matchGroup (l_ "template" </> o_) $ do
     match (l_ "authToken" </> o_)

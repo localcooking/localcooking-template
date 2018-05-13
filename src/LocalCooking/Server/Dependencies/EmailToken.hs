@@ -25,7 +25,7 @@ import Web.Dependencies.Sparrow.Types (JSONVoid, staticServer)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, (.=), (.:), Value (..))
 import Data.Aeson.Types (typeMismatch)
 import Data.Text (Text)
-import Control.Applicative ((<|>))
+import Control.Applicative (Alternative, (<|>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Control.Newtype (Newtype (unpack, pack))
@@ -60,10 +60,11 @@ instance ToJSON EmailTokenInitOut where
     EmailTokenInitOutSuccess -> String "success"
 
 
-emailTokenServer :: Server AppM EmailTokenInitIn
-                                EmailTokenInitOut
-                                JSONVoid
-                                JSONVoid
+emailTokenServer :: Alternative f
+                 => Server AppM f EmailTokenInitIn
+                                  EmailTokenInitOut
+                                  JSONVoid
+                                  JSONVoid
 emailTokenServer = staticServer $ \(EmailTokenInitInExists emailToken) -> do
   Env
     { envTokenContexts = TokenContexts{tokenContextEmail}

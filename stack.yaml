@@ -54,7 +54,7 @@ extra-deps:
 - nested-routes-9.0.0.1
 - path-extra-0.2.0
 - pred-trie-0.6.0.1
-- sparrow-0.0.1.6
+- sparrow-0.0.2.0
 - timemap-0.0.7
 - urlpath-9.0.0
 - wai-middleware-content-type-0.6.1.2
