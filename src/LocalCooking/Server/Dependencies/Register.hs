@@ -10,8 +10,11 @@ import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..), Managers (..))
 import LocalCooking.Types.Keys (Keys (..))
 import LocalCooking.Common.Password (HashedPassword)
+import LocalCooking.Common.AccessToken.Email (EmailToken (..))
+import LocalCooking.Common.AccessToken (genAccessToken)
 import LocalCooking.Database.Query.User (registerUser, RegisterFailure)
 import Google.Keys (ReCaptchaResponse (getReCaptchaResponse), ReCaptchaSecret (getReCaptchaSecret), ReCaptchaVerifyResponse (..), googleReCaptchaVerifyURI, GoogleCredentials (..))
+import SparkPost.Keys (SparkPostCredentials (..), showSparkPostKey, confirmEmailRequest)
 
 import Text.EmailAddress (EmailAddress)
 import qualified Text.EmailAddress as EmailAddress
@@ -23,11 +26,13 @@ import Data.URI.Auth.Host (printURIAuthHost)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative (Alternative)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (ask)
 import Control.Logging (log')
-import Network.HTTP.Client (httpLbs, responseBody, parseRequest, method, urlEncodedBody)
+import Control.Concurrent.STM (atomically, modifyTVar)
+import Network.HTTP.Client (httpLbs, responseBody, parseRequest, method, urlEncodedBody, requestHeaders)
 import Network.Mail.SMTP (sendMail, simpleMail, htmlPart, Address (..))
 
 import Web.Dependencies.Sparrow.Types (Server, staticServer, JSONVoid)
@@ -75,10 +80,13 @@ registerServer = staticServer $ \RegisterInitIn{..} -> do
   liftIO $ log' "running..."
 
   Env
-    { envManagers = Managers{managersReCaptcha}
-    , envKeys = Keys{keysGoogle = GoogleCredentials{googleReCaptchaSecret}}
+    { envManagers = Managers{managersReCaptcha,managersSparkPost}
+    , envKeys = Keys
+      { keysGoogle = GoogleCredentials{googleReCaptchaSecret}
+      , keysSparkPost = SparkPostCredentials{sparkPostKey}
+      }
     , envDatabase
-    , envSMTPHost
+    , envPendingEmail
     } <- ask
 
   liftIO $ do
@@ -106,26 +114,32 @@ registerServer = staticServer $ \RegisterInitIn{..} -> do
           liftIO $ log' $ "recaptcha failure: " <> T.pack (show $ responseBody resp)
           pure $ Just RegisterInitOutBadCaptcha
         | otherwise -> do
-            eUid <- liftIO $ registerUser envDatabase registerInitInEmail registerInitInPassword
+            eUid <- liftIO $
+              registerUser envDatabase registerInitInEmail registerInitInPassword
             case eUid of
               Left e -> do
-                liftIO $ log' "db error"
+                log' "db error"
                 pure $ Just $ RegisterInitOutDBError e
               Right uid -> do
-                liftIO $ log' "sending email..."
+                log' "sending email..."
+                resp <- liftIO $ do
+                  emailToken <- EmailToken <$> genAccessToken
+                  atomically $ modifyTVar envPendingEmail $ HashMap.insert emailToken uid
+                  req <- confirmEmailRequest sparkPostKey registerInitInEmail emailToken
+                  httpLbs req managersSparkPost
+                log' $ "Email Sent: " <> T.pack (show resp)
                 -- Send registration email
-                emailContent <- renderTextT $ do
-                  L.div_ [] $ do
-                    L.h1_ [] "Complete your Registration"
-                    L.p_ [] "test"
-                liftIO $ do
-                  let message = simpleMail
-                        (Address (Just "Local Cooking Webmaster") "noreply@localcooking.com")
-                        [Address Nothing (EmailAddress.toText registerInitInEmail)]
-                        []
-                        []
-                        "Complete your Registration with Local Cooking"
-                        [htmlPart emailContent]
-                  sendMail (T.unpack (printURIAuthHost envSMTPHost)) message
-                liftIO $ log' "email sent."
+                -- emailContent <- renderTextT $ do
+                --   L.div_ [] $ do
+                --     L.h1_ [] "Complete your Registration"
+                --     L.p_ [] "test"
+                -- liftIO $ do
+                --   let message = simpleMail
+                --         (Address (Just "Local Cooking Webmaster") "noreply@localcooking.com")
+                --         [Address Nothing (EmailAddress.toText registerInitInEmail)]
+                --         []
+                --         []
+                --         "Complete your Registration with Local Cooking"
+                --         [htmlPart emailContent]
+                --   sendMail (T.unpack (printURIAuthHost envSMTPHost)) message
                 pure $ Just RegisterInitOutEmailSent

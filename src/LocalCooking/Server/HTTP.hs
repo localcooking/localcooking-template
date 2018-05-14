@@ -31,6 +31,7 @@ import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Colors (LocalCookingColors)
+import LocalCooking.Database.Query.User (removePendingEmail)
 import Facebook.Types (FacebookLoginCode (..))
 import Facebook.State (FacebookLoginState (..), FacebookLoginUnsavedFormData (..))
 
@@ -53,6 +54,7 @@ import Data.Proxy (Proxy (..))
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import qualified Data.Strict.Maybe as Strict
+import qualified Data.HashMap.Strict as HashMap
 import Path.Extended ((<&>), ToLocation (..), FromLocation)
 import Text.Heredoc (here)
 import Control.Applicative ((<|>))
@@ -61,6 +63,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans (lift)
 import Control.Logging (log')
+import Control.Concurrent.STM (atomically, readTVar, writeTVar)
 import qualified Crypto.Saltine.Class as NaCl
 
 
@@ -154,11 +157,21 @@ Disallow: /facebookLoginDeauthorize
       Nothing -> def
       Just json -> case Aeson.decode (LBS.fromStrict json) of
         Nothing -> def
-        Just emailToken ->
-          (action $ get $ html colors
-            (Just emailToken)
-            (PreliminaryAuthToken Nothing)
-            Nothing (rootLink :: siteLinks) "") app req resp
+        Just emailToken -> do
+          Env{envPendingEmail,envDatabase} <- ask
+          mUid <- liftIO $ atomically $ do
+            xs <- readTVar envPendingEmail
+            let mx = HashMap.lookup emailToken xs
+            writeTVar envPendingEmail (HashMap.delete emailToken xs)
+            pure mx
+          case mUid of
+            Nothing -> def
+            Just uid -> do
+              liftIO (removePendingEmail envDatabase uid)
+              (action $ get $ html colors
+                (Just emailToken)
+                (PreliminaryAuthToken Nothing)
+                Nothing (rootLink :: siteLinks) "") app req resp
 
   -- TODO handle authenticated linking
   match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do

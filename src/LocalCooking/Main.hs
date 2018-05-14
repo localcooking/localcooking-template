@@ -46,9 +46,10 @@ import Data.Monoid ((<>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Strict.Maybe as Strict
 import Data.Insert.Class (Insertable)
+import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative (Alternative)
 import Control.Monad (unless)
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, newTVarIO)
 import Control.Logging (errorL, withStderrLogging)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Exception.Safe (bracket)
@@ -159,9 +160,6 @@ mkEnv
           Strict.Nothing -> 80
           Strict.Just p -> p
       )
-  envSMTPHost <- case parseOnly parseURIAuthHost (T.pack argsImplSMTPHost) of
-    Left e -> errorL $ "Can't parse SMTP host: " <> T.pack e
-    Right a -> pure a
 
   putStrLn $ unlines
     [ "Starting server with environment:"
@@ -196,10 +194,11 @@ mkEnv
 
   envTokenContexts <- atomically defTokenContexts
 
+  envPendingEmail <- newTVarIO HashMap.empty
+
   pure
     ( Env
       { envHostname
-      , envSMTPHost
       , envDevelopment
       , envTls = argsImplTls
       , envKeys
@@ -207,6 +206,7 @@ mkEnv
       , envDatabase
       , envSalt
       , envTokenContexts
+      , envPendingEmail
       }
     , fromIntegral boundPort
     )

@@ -19,12 +19,14 @@ import Data.Aeson (FromJSON (..), Value (Object), (.:))
 import Data.Aeson.Types (typeMismatch)
 import Facebook.App (Credentials)
 import Google.Keys (GoogleCredentials)
+import SparkPost.Keys (SparkPostCredentials)
 
 
 -- | Data stored in @~/.localcooking/secret@
 data Keys = Keys
   { keysFacebook :: Credentials
   , keysGoogle :: GoogleCredentials
+  , keysSparkPost :: SparkPostCredentials
   }
 
 
@@ -32,5 +34,6 @@ instance FromJSON Keys where
   parseJSON (Object o) = do
     keysFacebook <- o .: "facebook"
     keysGoogle <- o .: "google"
-    pure Keys{keysFacebook,keysGoogle}
+    keysSparkPost <- o .: "sparkPost"
+    pure Keys{keysFacebook,keysGoogle,keysSparkPost}
   parseJSON x = typeMismatch "Keys" x

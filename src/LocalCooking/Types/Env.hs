@@ -30,7 +30,9 @@ import Data.URI.Auth.Host (URIAuthHost (..))
 import Data.Default (Default (..))
 import qualified Data.Strict.Maybe as Strict
 import Data.Pool (destroyAllResources)
-import Control.Concurrent.STM (STM, atomically)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
+import Control.Concurrent.STM (STM, atomically, TVar, newTVarIO)
 import Crypto.Saltine.Core.Box (Nonce, newNonce)
 import System.IO.Unsafe (unsafePerformIO)
 import Network.HTTP.Client (Manager)
@@ -43,7 +45,6 @@ import Database.Persist.Sql (ConnectionPool)
 -- | Read-only \"Environment\"
 data Env = Env
   { envHostname        :: URIAuth -- ^ As bound
-  , envSMTPHost        :: URIAuthHost -- ^ Remotely accessible mailer
   , envDevelopment     :: Maybe Development -- ^ Whether or not in \"development-mode\"
   , envTls             :: Bool -- ^ Served over TLS
   , envKeys            :: Keys -- ^ Parsed 'LocalCooking.Types.Keys.Keys' from @~/.localcooking/secret@
@@ -51,12 +52,12 @@ data Env = Env
   , envDatabase        :: ConnectionPool -- ^ PostgreSQL connection pool
   , envSalt            :: HashedPassword -- ^ Persisted, long-term password salt
   , envTokenContexts   :: TokenContexts -- ^ TimeMap for decaying access tokens
+  , envPendingEmail    :: TVar (HashMap EmailToken UserId)
   }
 
 instance Default Env where
   def = Env
     { envHostname      = URIAuth Strict.Nothing Localhost (Strict.Just 3000)
-    , envSMTPHost      = Localhost
     , envDevelopment   = def
     , envTls           = False
     , envKeys          = error "No access to secret keys in default environment"
@@ -64,6 +65,7 @@ instance Default Env where
     , envDatabase      = error "No database"
     , envSalt          = error "No salt"
     , envTokenContexts = def
+    , envPendingEmail  = unsafePerformIO (newTVarIO HashMap.empty)
     }
 
 -- | Disconnects and cleans up safely
@@ -78,6 +80,7 @@ releaseEnv Env{envDatabase} =
 data Managers = Managers
   { managersFacebook  :: Manager
   , managersReCaptcha :: Manager
+  , managersSparkPost :: Manager
   }
 
 instance Default Managers where
@@ -87,9 +90,11 @@ defManagers :: IO Managers
 defManagers = do
   managersFacebook <- newTlsManager -- FIXME could bug out from facebook booting us
   managersReCaptcha <- newTlsManager
+  managersSparkPost <- newTlsManager
   pure Managers
     { managersFacebook
     , managersReCaptcha
+    , managersSparkPost
     }
 
 -- | Contains a site-wide \"cache buster\", so browsers don't use old assets
