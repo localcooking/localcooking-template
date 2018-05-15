@@ -61,8 +61,7 @@ confirmEmailRequest key email emailToken = do
         , requestBody = RequestBodyLBS (Aeson.encode body)
         }
       body = object
-        [ "campaign_id" .= String "confirm_email"
-        , "recipients" .= object
+        [ "recipients" .= object
           [ "address" .= email
           , "substitution_data" .= object
             [ "emailCode" .= emailToken

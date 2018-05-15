@@ -121,11 +121,11 @@ registerServer = staticServer $ \RegisterInitIn{..} -> do
                 log' "db error"
                 pure $ Just $ RegisterInitOutDBError e
               Right uid -> do
-                log' "sending email..."
                 resp <- liftIO $ do
                   emailToken <- EmailToken <$> genAccessToken
                   atomically $ modifyTVar envPendingEmail $ HashMap.insert emailToken uid
                   req <- confirmEmailRequest sparkPostKey registerInitInEmail emailToken
+                  log' $ "sending email..." <> T.pack (show req)
                   httpLbs req managersSparkPost
                 log' $ "Email Sent: " <> T.pack (show resp)
                 -- Send registration email
