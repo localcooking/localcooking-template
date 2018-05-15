@@ -1,5 +1,6 @@
 {-# LANGUAGE
     OverloadedStrings
+  , RecordWildCards
   , NamedFieldPuns
   #-}
 
@@ -11,7 +12,8 @@ import LocalCooking.Types.Env (Env (..))
 import LocalCooking.Auth (usersAuthToken)
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Common.Password (HashedPassword)
-import LocalCooking.Database.Query.User (changeSecurityDetails)
+import LocalCooking.Database.Query.User (changeSecurityDetails, registerFBUserId)
+import Facebook.Types (FacebookUserId)
 
 import Web.Dependencies.Sparrow.Types (Server, JSONVoid, staticServer)
 
@@ -27,18 +29,21 @@ data SecurityInitIn' = SecurityInitIn'
   { securityInitInEmailAddress :: EmailAddress
   , securityInitInNewPassword  :: HashedPassword
   , securityInitInOldPassword  :: HashedPassword
+  , securityInitInFbUserId     :: Maybe FacebookUserId
   }
 
 instance FromJSON SecurityInitIn' where
   parseJSON json = case json of
     Object o -> do
-      email <- o .: "email"
+      email       <- o .: "email"
       newPassword <- o .: "newPassword"
       oldPassword <- o .: "oldPassword"
+      fbUserId    <- o .: "fbUserId"
       pure SecurityInitIn'
         { securityInitInEmailAddress = email
-        , securityInitInNewPassword = newPassword
-        , securityInitInOldPassword = oldPassword
+        , securityInitInNewPassword  = newPassword
+        , securityInitInOldPassword  = oldPassword
+        , securityInitInFbUserId     = fbUserId
         }
     _ -> fail
     where
@@ -64,14 +69,19 @@ securityServer :: Alternative f
                                 SecurityInitOut
                                 JSONVoid
                                 JSONVoid
-securityServer = staticServer $ \(AuthInitIn authToken (SecurityInitIn' email newPassword oldPassword)) -> do
+securityServer = staticServer $ \(AuthInitIn authToken SecurityInitIn'{..}) -> do
   Env{envDatabase} <- ask
 
   mUserId <- usersAuthToken authToken
   case mUserId of
     Nothing -> pure $ Just AuthInitOutNoAuth
     Just userId -> do
-      b <- liftIO $ changeSecurityDetails envDatabase userId (email,newPassword) oldPassword
+      b <- liftIO $ do
+        case securityInitInFbUserId of
+          Nothing -> pure ()
+          Just fbUserId -> registerFBUserId envDatabase userId fbUserId
+        changeSecurityDetails envDatabase userId
+          (securityInitInEmailAddress,securityInitInNewPassword) securityInitInOldPassword
       if b
         then pure $ Just $ AuthInitOut SecurityInitOutSuccess
         else pure $ Just $ AuthInitOut SecurityInitOutFailure
