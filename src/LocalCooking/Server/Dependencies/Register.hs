@@ -12,9 +12,10 @@ import LocalCooking.Types.Keys (Keys (..))
 import LocalCooking.Common.Password (HashedPassword)
 import LocalCooking.Common.AccessToken.Email (EmailToken (..))
 import LocalCooking.Common.AccessToken (genAccessToken)
-import LocalCooking.Database.Query.User (registerUser, RegisterFailure)
+import LocalCooking.Database.Query.User (registerUser, registerFBUserId, RegisterFailure)
 import Google.Keys (ReCaptchaResponse (getReCaptchaResponse), ReCaptchaSecret (getReCaptchaSecret), ReCaptchaVerifyResponse (..), googleReCaptchaVerifyURI, GoogleCredentials (..))
 import SparkPost.Keys (SparkPostCredentials (..), showSparkPostKey, confirmEmailRequest)
+import Facebook.Types (FacebookUserId)
 
 import Text.EmailAddress (EmailAddress)
 import qualified Text.EmailAddress as EmailAddress
@@ -41,9 +42,10 @@ import qualified Lucid.Html5 as L
 
 
 data RegisterInitIn = RegisterInitIn
-  { registerInitInEmail :: EmailAddress
-  , registerInitInPassword :: HashedPassword
+  { registerInitInEmail     :: EmailAddress
+  , registerInitInPassword  :: HashedPassword
   , registerInitInReCaptcha :: ReCaptchaResponse
+  , registerInitInFbUserId  :: Maybe FacebookUserId
   }
 
 
@@ -52,6 +54,7 @@ instance FromJSON RegisterInitIn where
     Object o -> RegisterInitIn <$> o .: "email"
                                <*> o .: "password"
                                <*> o .: "reCaptcha"
+                               <*> o .: "fbUserId"
     _ -> fail
     where fail = typeMismatch "RegisterInitIn" json
 
@@ -122,24 +125,13 @@ registerServer = staticServer $ \RegisterInitIn{..} -> do
                 pure $ Just $ RegisterInitOutDBError e
               Right uid -> do
                 resp <- liftIO $ do
+                  case registerInitInFbUserId of
+                    Nothing -> pure ()
+                    Just fbUserId -> registerFBUserId envDatabase uid fbUserId
                   emailToken <- EmailToken <$> genAccessToken
                   atomically $ modifyTVar envPendingEmail $ HashMap.insert emailToken uid
                   req <- confirmEmailRequest sparkPostKey registerInitInEmail emailToken
                   log' $ "sending email..." <> T.pack (show req)
                   httpLbs req managersSparkPost
                 log' $ "Email Sent: " <> T.pack (show resp)
-                -- Send registration email
-                -- emailContent <- renderTextT $ do
-                --   L.div_ [] $ do
-                --     L.h1_ [] "Complete your Registration"
-                --     L.p_ [] "test"
-                -- liftIO $ do
-                --   let message = simpleMail
-                --         (Address (Just "Local Cooking Webmaster") "noreply@localcooking.com")
-                --         [Address Nothing (EmailAddress.toText registerInitInEmail)]
-                --         []
-                --         []
-                --         "Complete your Registration with Local Cooking"
-                --         [htmlPart emailContent]
-                --   sendMail (T.unpack (printURIAuthHost envSMTPHost)) message
                 pure $ Just RegisterInitOutEmailSent
