@@ -66,7 +66,6 @@ data ArgsImpl = ArgsImpl
   { argsImplSecretKey  :: FilePath -- ^ Path to the @~/.localcooking/secret@ file
   , argsImplHostname   :: String -- ^ Bound name and port of server - @localcooking.com:3000@
   , argsImplPublicPort :: Int -- ^ The port assumed to be represented by a reverse HTTP proxy - @80@
-  , argsImplSMTPHost   :: String -- ^ Host of the mailer
   , argsImplProduction :: Bool -- ^ \"In production\" or not
   , argsImplTls        :: Bool -- ^ If HTTP proxy supports TLS/SSL
   , argsImplDbHost     :: String -- ^ PostgreSQL host
@@ -84,7 +83,6 @@ args username = ArgsImpl
              <$> parseSecretKey
              <*> parseHostname
              <*> parsePublicPort
-             <*> parseSMTPHost
              <*> parseProduction
              <*> parseTls
              <*> parseDbHost
@@ -102,9 +100,6 @@ args username = ArgsImpl
     parsePublicPort = option auto $
       long "public-port" <> help "Publically accessible port of the service, if different from the bound port (i.e. 80)"
         <> value 3000 <> showDefault
-    parseSMTPHost = strOption $
-      long "smtp-host" <> help "Hostname of the SMTP outgoing mail server"
-        <> value "localhost" <> showDefault
     parseProduction = switch $
       long "production" <> help "Run the server in production-mode (less logging)"
     parseTls = switch $
@@ -131,7 +126,6 @@ mkEnv
     { argsImplSecretKey
     , argsImplHostname
     , argsImplPublicPort
-    , argsImplSMTPHost
     , argsImplProduction
     , argsImplTls
     , argsImplDbHost
