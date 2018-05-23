@@ -178,30 +178,31 @@ Disallow: /facebookLoginDeauthorize
     let qs = queryString req
     ( eToken :: Either AuthTokenFailure AuthToken
       , mFbState :: Maybe (FacebookLoginState siteLinks)
-      ) <- case do  let bad = do
-                          errorCode <- join $ lookup "error_code" qs
-                          errorMessage <- join $ lookup "error_message" qs
-                          pure $ Left $ FBLoginReturnBad (T.decodeUtf8 errorCode) (T.decodeUtf8 errorMessage)
-                        denied = do
-                          error' <- join $ lookup "error" qs
-                          errorReason <- join $ lookup "error_reason" qs
-                          errorDescription <- join $ lookup "error_description" qs
-                          if error' == "access_denied" && errorReason == "user_denied"
-                            then pure $ Left $ FBLoginReturnDenied $ T.decodeUtf8 errorDescription
-                            else Nothing
-                        good = do
-                          code <- fmap T.decodeUtf8 $ join $ lookup "code" qs
-                          (state :: FacebookLoginState siteLinks) <- do
-                            x <- join $ lookup "state" qs
-                            join $ Aeson.decode $ LBS.fromStrict x
-                          pure $ Right (FacebookLoginCode code, state)
-                    bad <|> good <|> denied of
+      ) <- case let bad = do
+                      errorCode <- join $ lookup "error_code" qs
+                      errorMessage <- join $ lookup "error_message" qs
+                      pure $ Left $ FBLoginReturnBad (T.decodeUtf8 errorCode) (T.decodeUtf8 errorMessage)
+                    denied = do
+                      error' <- join $ lookup "error" qs
+                      errorReason <- join $ lookup "error_reason" qs
+                      errorDescription <- join $ lookup "error_description" qs
+                      if error' == "access_denied" && errorReason == "user_denied"
+                        then pure $ Left $ FBLoginReturnDenied $ T.decodeUtf8 errorDescription
+                        else Nothing
+                    good = do
+                      code <- fmap T.decodeUtf8 $ join $ lookup "code" qs
+                      (state :: FacebookLoginState siteLinks) <- do
+                        x <- join $ lookup "state" qs
+                        join $ Aeson.decode $ LBS.fromStrict x
+                      pure $ Right (FacebookLoginCode code, state)
+                in  bad <|> good <|> denied of
 
               Nothing -> pure (Left FBLoginReturnBadParse, Nothing)
               Just eX -> case eX of
                 Left e -> pure (Left e, Nothing)
                 -- Successfully fetched the fbCode and FacebookState from query string
                 Right (code, state) -> do
+                  -- NOTE ** Server Call Site
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
                   ( mCont :: Maybe (ServerContinue AppM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
                     ) <- authTokenServer (AuthTokenInitInFacebookCode code)
