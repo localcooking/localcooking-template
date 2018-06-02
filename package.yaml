@@ -27,6 +27,7 @@ dependencies:
 - localcooking-shared
 - localcooking-db
 - localcooking-fb
+- localcooking-dependencies
 - aeson
 - aeson-attoparsec
 - async

@@ -26,7 +26,7 @@ import LocalCooking.Types (AppM)
 import LocalCooking.Types.Env (Env (..), TokenContexts (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Colors (LocalCookingColors)
-import LocalCooking.Server.Dependencies.AccessToken.Generic (expireThread)
+-- import LocalCooking.Server.Dependencies.AccessToken.Generic (expireThread)
 
 import Web.Routes.Nested (RouterT, textOnly)
 import Web.Dependencies.Sparrow (SparrowServerT, serveDependencies)
@@ -47,7 +47,7 @@ import Control.Concurrent.Async (async)
 
 
 -- | Top-level Local Cooking server template arguments
-data LocalCookingArgs siteLinks sec f = LocalCookingArgs
+data LocalCookingArgs siteDeps siteLinks sec f = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString -- ^ Raw frontend javascript
   , localCookingArgsFrontendMin :: BS.ByteString -- ^ Raw minified frontend javascript
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)] -- ^ Favicon directory asset contents
@@ -71,13 +71,13 @@ server :: forall sec siteLinks f
        -> AppM ()
 server port LocalCookingArgs{..} = do
   -- auth token expiring checker - FIXME use a cassandra database instead probably
-  Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
-  liftIO $ void $ async $ -- forever $ do
-    let delay =
-          let second = 10 ^ 6
-              minute = second * 60
-          in  minute
-    in  expireThread delay tokenContextAuth
+  -- Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
+  -- liftIO $ void $ async $ -- forever $ do
+  --   let delay =
+  --         let second = 10 ^ 6
+  --             minute = second * 60
+  --         in  minute
+  --   in  expireThread delay tokenContextAuth
 
   -- HTTP Server
   liftBaseWith $ \runInBase -> do
