@@ -25,8 +25,9 @@ ghc-options:
 dependencies:
 - base >= 4.7 && < 5
 - localcooking-shared
-- localcooking-db
+# - localcooking-db
 - localcooking-fb
+# - localcooking-function
 - localcooking-dependencies
 - aeson
 - aeson-attoparsec
@@ -38,7 +39,7 @@ dependencies:
 - bytestring
 - data-default
 - directory
-- emailaddress
+- emailaddress >= 0.2.0.1
 - extractable-singleton
 - file-embed
 - hashable

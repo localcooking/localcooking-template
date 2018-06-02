@@ -47,13 +47,13 @@ import Control.Concurrent.Async (async)
 
 
 -- | Top-level Local Cooking server template arguments
-data LocalCookingArgs siteDeps siteLinks sec f = LocalCookingArgs
+data LocalCookingArgs siteLinks sec = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString -- ^ Raw frontend javascript
   , localCookingArgsFrontendMin :: BS.ByteString -- ^ Raw minified frontend javascript
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)] -- ^ Favicon directory asset contents
   , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT AppM)
                                 -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Casual HTTP links
-  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) f AppM () -- ^ Casual Sparrow dependencies
+  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) [] AppM () -- ^ Casual Sparrow dependencies
   , localCookingArgsColors      :: LocalCookingColors -- ^ Site-wide colors
   }
 
@@ -78,6 +78,7 @@ server port LocalCookingArgs{..} = do
   --             minute = second * 60
   --         in  minute
   --   in  expireThread delay tokenContextAuth
+  -- TODO localcooking-function should spawn & kill the tokencontext threads necessary
 
   -- HTTP Server
   liftBaseWith $ \runInBase -> do
@@ -97,4 +98,4 @@ server port LocalCookingArgs{..} = do
 
 -- | Simple @404@ response
 defApp :: ApplicationT AppM
-defApp _ respond = respond $ textOnly "404" status404 []
+defApp _ respond = respond (textOnly "404" status404 [])

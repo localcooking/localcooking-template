@@ -26,13 +26,7 @@ import LocalCooking.Types (AppM, runAppM)
 import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts, releaseEnv)
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
-import qualified LocalCooking.Database.Schema.Facebook.AccessToken as FacebookAccess
-import qualified LocalCooking.Database.Schema.Facebook.UserDetails as FacebookDetails
-import qualified LocalCooking.Database.Schema.User.Password as UserPassword
-import qualified LocalCooking.Database.Schema.User.Email as UserEmail
-import qualified LocalCooking.Database.Schema.User.Pending as UserPending
-import qualified LocalCooking.Database.Schema.User.Role as UserRole
-import qualified LocalCooking.Database.Schema.Salt as Salt
+import LocalCooking.Database.Schema (migrateAll)
 
 import Options.Applicative (Parser, execParser, info, helper, fullDesc, progDesc, header, strOption, option, switch, auto, long, help, value, showDefault)
 import qualified Data.Text as T
@@ -118,10 +112,11 @@ args username = ArgsImpl
       long "db-name" <> help "Database name for the PostgreSQL pooled connection"
 
 
--- | Marshalls the 'ArgsImpl' data into functional references and shared resource pools in 'LocalCooking.Types.Env.Env',
--- and the port to bind to.
-mkEnv :: ArgsImpl -> IO (Env, Int)
-mkEnv
+
+-- | Marshalls the 'ArgsImpl' data into functional references and shared resource pools
+-- in 'LocalCooking.Types.Env.Env', and the port to bind to.
+mkSystemEnv :: ArgsImpl -> IO (NewSystemEnvArgs, Int)
+mkSystemEnv
   ArgsImpl
     { argsImplSecretKey
     , argsImplHostname
@@ -134,7 +129,7 @@ mkEnv
     , argsImplDbPort
     , argsImplDbName
     } = do
-  envKeys <- case parseOnly absFilePath (T.pack argsImplSecretKey) of
+  keys <- case parseOnly absFilePath (T.pack argsImplSecretKey) of
     Left e -> errorL $ "Secret key path not absolute: " <> T.pack e
     Right f -> do
       exists <- doesDirectoryExist $ toFilePath $ parent f
@@ -142,18 +137,37 @@ mkEnv
       x <- LBS.readFile (toFilePath f)
       case Aeson.eitherDecode x of
         Left e -> errorL $ "Secret key file contents cannot be parsed: " <> T.pack e
-        Right y -> pure y
-  (envHostname, boundPort) <- case parseOnly parseURIAuth (T.pack argsImplHostname) of
+        Right y -> pure (y :: Keys)
+
+  (publicHostname, boundPort) <- case parseOnly parseURIAuth (T.pack argsImplHostname) of
     Left e -> errorL $ "Can't parse hostname: " <> T.pack e
-    Right (URIAuth a h mPort) -> pure
-      ( URIAuth a h ( if argsImplPublicPort == 80
-                      then Strict.Nothing
-                      else Strict.Just $ fromIntegral argsImplPublicPort
-                    )
-      , case mPort of
-          Strict.Nothing -> 80
-          Strict.Just p -> p
-      )
+    Right (URIAuth auth host mPort) -> pure $
+      let port
+            | argsImplPublicPort == 80 = Strict.Nothing
+            | otherwise = Strict.Just (fromIntegral argsImplPublicPort)
+      in  ( URIAuth auth host port
+          , case mPort of
+              Strict.Nothing -> 80
+              Strict.Just p -> p
+          )
+
+  let newSystemEnvArgs = NewSystemEnvArgs
+        { dbHost = T.pack argsImplDbHost
+        , dbPort = argsImplDbPort
+        , dbUser = T.pack argsImplDbUser
+        , dbPassword = T.pack argsImplDbPassword
+        , dbName = T.pack argsImplDbName
+        , keys
+        , facebookRedirect = URI
+            (Strict.Just $ if argsImplTls "https" else "http")
+            True
+            publicHostname
+            ["facebookLoginReturn"] -- TODO ensure route exists
+            []
+            Strict.Nothing
+        }
+
+  -- migrateAll systemEnvDatabase
 
   putStrLn $ unlines
     [ "Starting server with environment:"
@@ -164,44 +178,8 @@ mkEnv
     , " - secret key location: " <> argsImplSecretKey
     ]
 
-  envManagers <- defManagers
-  envDevelopment <- if argsImplProduction then pure Nothing else Just <$> defDevelopment
-
-  envDatabase <- do
-    let connStr = "host=" <> BS8.fromString argsImplDbHost
-               <> " port=" <> BS8.fromString (show argsImplDbPort)
-               <> " user=" <> BS8.fromString argsImplDbUser
-               <> " password=" <> BS8.fromString argsImplDbPassword
-               <> " dbname=" <> BS8.fromString argsImplDbName
-    runStderrLoggingT (createPostgresqlPool connStr 10)
-
-  flip runSqlPool envDatabase $ do
-    runMigration FacebookAccess.migrateAll
-    runMigration FacebookDetails.migrateAll
-    runMigration UserPassword.migrateAll
-    runMigration UserEmail.migrateAll
-    runMigration UserPending.migrateAll
-    runMigration UserRole.migrateAll
-    runMigration Salt.migrateAll
-
-  envSalt <- getPasswordSalt envDatabase
-
-  envTokenContexts <- atomically defTokenContexts
-
-  envPendingEmail <- newTVarIO HashMap.empty
-
   pure
-    ( Env
-      { envHostname
-      , envDevelopment
-      , envTls = argsImplTls
-      , envKeys
-      , envManagers
-      , envDatabase
-      , envSalt
-      , envTokenContexts
-      , envPendingEmail
-      }
+    ( newSystemEnvArgs
     , fromIntegral boundPort
     )
 
@@ -211,27 +189,19 @@ mkEnv
 defaultMain :: LocalCookingSiteLinks siteLinks
             => FromLocation siteLinks
             => ToLocation siteLinks
-            => Alternative f
-            => Insertable f AppM
-            => Foldable f
             => String -- ^ CLI Invocation heading - i.e. \"@Local Cooking Farms - farm.localcooking.com daemon@\"
-            -> LocalCookingArgs siteLinks sec f -- ^ Arguments
+            -> LocalCookingArgs siteLinks sec [] -- ^ Arguments
             -> IO ()
 defaultMain head' lcArgs = do
   username <- getEnv "USER"
-
-  let allocate :: IO (Env, Int)
-      allocate = do
-        as <- execParser (opts username)
-        mkEnv as
-
-      release :: (Env, Int) -> IO ()
-      release (e,_) =
-        releaseEnv e
+  cliArgs <- execParser (opts username)
+  (envArgs,boundPort) <- mkSystemEnv cliArgs
 
   withStderrLogging $
-    bracket allocate release $ \(env, port) ->
-      runAppM (server port lcArgs) env
+    execAppM
+      envArgs
+      (\SystemEnv{systemEnvDatabase} -> migrateAll systemEnvDatabase)
+      (server port lcArgs)
 
   where
     opts u = info (helper <*> args u) $ fullDesc <> progDesc desc <> header head'

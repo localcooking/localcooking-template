@@ -75,12 +75,12 @@ htmlLight :: Status
           -> HtmlT (AbsoluteUrlT AppM) a
           -> FileExtListenerT AppM ()
 htmlLight s content = do
-  bs <- lift $ do
+  htmlBS <- lift $ do
     Env{envHostname,envTls} <- ask
     let locationToURI = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname
     runAbsoluteUrlT (renderBST content) locationToURI
 
-  bytestring CT.Html bs
+  bytestring CT.Html htmlBS
   modify . HM.map $ mapStatus (const s)
                   . mapHeaders ([("content-Type", "text/html")] ++)
 
@@ -97,6 +97,8 @@ html :: LocalCookingSiteLinks siteLinks
 html colors emailToken preliminary formData link =
   htmlLight status200 . mainTemplate colors emailToken preliminary formData link
 
+
+-- TODO Consolidate instance arguments into datum
 
 -- | Top-level scaffolding for the site
 masterPage :: LocalCookingSiteLinks siteLinks

@@ -38,9 +38,15 @@ packages:
 - ../localcooking-shared
 - ../localcooking-db
 - ../localcooking-fb
+- ../localcooking-function
+- ../localcooking-dependencies
 - location:
     git: https://github.com/athanclark/saltine.git
     commit: 8debfd737231dc5f3eb5cf34f6da8c3d33bb8a4b
+  extra-dep: true
+- location:
+    git: git@git.localcooking.com:private-tooling/emailaddress.git
+    commit: 31540c8305e0db6b98dcc1beb79afd1e9ed35bb8
   extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
