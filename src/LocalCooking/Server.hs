@@ -70,16 +70,6 @@ server :: forall sec siteLinks f
        -> LocalCookingArgs siteLinks sec f
        -> AppM ()
 server port LocalCookingArgs{..} = do
-  -- auth token expiring checker - FIXME use a cassandra database instead probably
-  -- Env{envTokenContexts = TokenContexts{tokenContextAuth}} <- ask
-  -- liftIO $ void $ async $ -- forever $ do
-  --   let delay =
-  --         let second = 10 ^ 6
-  --             minute = second * 60
-  --         in  minute
-  --   in  expireThread delay tokenContextAuth
-  -- TODO localcooking-function should spawn & kill the tokencontext threads necessary
-
   -- HTTP Server
   liftBaseWith $ \runInBase -> do
     ds <- runSingleton <$> runInBase (serveDependencies (dependencies localCookingArgsDeps))

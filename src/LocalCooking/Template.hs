@@ -23,15 +23,16 @@ HTML Rendering tools
 
 module LocalCooking.Template where
 
-import           LocalCooking.Types (AppM)
-import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
+import           LocalCooking.Function.System (AppM, Keys (..), SystemEnv (..))
+-- import           LocalCooking.Types (AppM)
+-- import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
 import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
-import           LocalCooking.Types.Keys (Keys (..))
-import           LocalCooking.Server.Dependencies.AuthToken (PreliminaryAuthToken (..))
+-- import           LocalCooking.Types.Keys (Keys (..))
+import           LocalCooking.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
 import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
 import           LocalCooking.Common.AccessToken.Email (EmailToken)
-import           Facebook.App (Credentials (..))
+import           Facebook.Types (FacebookAppCredentials (..))
 import           Facebook.State (FacebookLoginUnsavedFormData)
 import           Google.Keys (GoogleCredentials (..), googleAnalyticsGTagToURI, GoogleAnalyticsGTag (..), googleReCaptchaAssetURI)
 
@@ -129,8 +130,8 @@ masterPage LocalCookingColors{..} emailToken preliminary formData link =
         , styles =
           deploy M.Css Inline $ renderCssUrl (\_ _ -> undefined) inlineStyles
         , bodyScripts = do
-          Env{envDevelopment = mDev} <- lift ask
-          deploy M.JavaScript M.Remote $ toLocation $ IndexJs $ devCacheBuster <$> mDev
+          -- Env{envDevelopment = mDev} <- lift ask -- TODO dev env
+          deploy M.JavaScript M.Remote $ toLocation $ IndexJs Nothing -- $ devCacheBuster <$> mDev
         , afterStylesScripts = do
           env@Env
             { envKeys = Keys

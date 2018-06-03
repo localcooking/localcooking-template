@@ -25,9 +25,9 @@ ghc-options:
 dependencies:
 - base >= 4.7 && < 5
 - localcooking-shared
-# - localcooking-db
+- localcooking-db
 - localcooking-fb
-# - localcooking-function
+- localcooking-function
 - localcooking-dependencies
 - aeson
 - aeson-attoparsec
@@ -50,8 +50,10 @@ dependencies:
 - logging
 - lucid
 - markup >= 4.2.0
+- monad-control
 - monad-control-aligned
 - monad-logger
+- monad-unlift
 - mtl
 - nested-routes >= 9.0.0.1
 - newtype
@@ -74,8 +76,10 @@ dependencies:
 - time
 - timemap >= 0.0.7
 - tmapmvar
+- transformers-base
 - unordered-containers
 - urlpath >= 9.0.0
+- unliftio-core
 - utf8-string
 - uuid
 - wai
