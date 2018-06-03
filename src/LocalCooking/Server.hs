@@ -21,9 +21,9 @@ Portability: GHC
 module LocalCooking.Server where
 
 import LocalCooking.Server.HTTP (httpServer)
-import LocalCooking.Server.Dependencies (dependencies)
+import LocalCooking.Dependencies (dependencies)
 import LocalCooking.Types (AppM)
-import LocalCooking.Types.Env (Env (..), TokenContexts (..))
+-- import LocalCooking.Types.Env (Env (..), TokenContexts (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Colors (LocalCookingColors)
 -- import LocalCooking.Server.Dependencies.AccessToken.Generic (expireThread)
@@ -36,7 +36,7 @@ import Network.HTTP.Types (status404)
 import Data.Singleton.Class (runSingleton)
 import qualified Data.ByteString as BS
 import Data.Proxy (Proxy (..))
-import Data.Insert.Class (Insertable)
+-- import Data.Insert.Class (Insertable)
 import Path.Extended (FromLocation, ToLocation)
 import Control.Applicative (Alternative)
 import Control.Monad (void)
@@ -59,15 +59,12 @@ data LocalCookingArgs siteLinks sec = LocalCookingArgs
 
 
 -- | Majority of business logic
-server :: forall sec siteLinks f
+server :: forall sec siteLinks
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
        => ToLocation siteLinks
-       => Alternative f
-       => Insertable f AppM
-       => Foldable f
        => Int -- ^ Port to bind to
-       -> LocalCookingArgs siteLinks sec f
+       -> LocalCookingArgs siteLinks sec
        -> AppM ()
 server port LocalCookingArgs{..} = do
   -- HTTP Server

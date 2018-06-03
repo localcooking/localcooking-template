@@ -8,10 +8,8 @@
   #-}
 
 module LocalCooking.Types
-  ( AppM, Development, showCacheBuster, Env (..), liftSystem, isDevelopment, getEnv
+  ( Development, showCacheBuster, Env (..), isDevelopment
   ) where
-
-import LocalCooking.Function.System (SystemM)
 
 import Data.URI (URI)
 import Data.Functor.Identity (Identity)
@@ -48,28 +46,3 @@ isDevelopment :: Env -> Bool
 isDevelopment Env{envDevelopment} = case envDevelopment of
   Nothing -> False
   Just _ -> True
-
-
-newtype AppM a = AppM
-  { getAppM :: ReaderT Env SystemM a
-  } deriving (Functor, Applicative, Monad, MonadIO, MonadBase IO, MonadBaseControl IO, MonadBaseUnlift IO)
-
-
-instance MonadUnliftIO AppM where
-  askUnliftIO = AppM $ do
-    UnliftIO f <- askUnliftIO
-    pure $ UnliftIO $ f . getAppM
-  withRunInIO runner = AppM $ withRunInIO $ \fromM -> runner (fromM . getAppM)
-
-instance Aligned.MonadBaseControl IO AppM (Compose (Compose Identity Identity) Identity) where
-  liftBaseWith f = AppM $ Aligned.liftBaseWith $ \runInBase ->
-    f (runInBase . getAppM)
-  restoreM = AppM . Aligned.restoreM
-
-
-liftSystem :: SystemM a -> AppM a
-liftSystem x = AppM (lift x)
-
-
-getEnv :: AppM Env
-getEnv = AppM ask

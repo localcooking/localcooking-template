@@ -69,7 +69,7 @@ dependencies:
 - saltine
 - shakespeare
 - smtp-mail
-- sparrow >= 0.0.2.0
+- sparrow >= 0.0.2.1
 - stm
 - strict
 - text

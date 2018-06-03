@@ -23,9 +23,9 @@ HTML Rendering tools
 
 module LocalCooking.Template where
 
-import           LocalCooking.Types (AppM, getEnv, isDevelopment, Env (..), liftSystem)
-import           LocalCooking.Function.System (Keys (..), SystemEnv (..), getSystemEnv)
--- import           LocalCooking.Types (AppM)
+import           LocalCooking.Types (isDevelopment, Env (..))
+import           LocalCooking.Function.System (SystemM, Keys (..), SystemEnv (..), getSystemEnv)
+-- import           LocalCooking.Types (SystemM)
 -- import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
 import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
 -- import           LocalCooking.Types.Keys (Keys (..))
@@ -73,12 +73,13 @@ deriving instance Show URI
 
 
 -- | For raw HTML responses
-htmlLight :: Status
-          -> HtmlT (AbsoluteUrlT AppM) a
-          -> FileExtListenerT AppM ()
-htmlLight s content = do
+htmlLight :: Env
+          -> Status
+          -> HtmlT (AbsoluteUrlT SystemM) a
+          -> FileExtListenerT SystemM ()
+htmlLight Env{envMkURI} s content = do
   htmlBS <- lift $ do
-    Env{envMkURI} <- getEnv
+    -- Env{envMkURI} <- getEnv
     -- Env{envHostname,envTls} <- ask
     -- let locationToURI = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname
     runAbsoluteUrlT (renderBST content) envMkURI -- locationToURI
@@ -90,29 +91,31 @@ htmlLight s content = do
 
 -- | Wrap some HTML into a 'masterPage' template, and issue it as a @text/html@ response.
 html :: LocalCookingSiteLinks siteLinks
-     => LocalCookingColors
+     => Env
+     -> LocalCookingColors
      -> Maybe EmailToken
      -> PreliminaryAuthToken
      -> Maybe FacebookLoginUnsavedFormData
      -> siteLinks
-     -> HtmlT (AbsoluteUrlT AppM) ()
-     -> FileExtListenerT AppM ()
-html colors emailToken preliminary formData link =
-  htmlLight status200 . mainTemplate colors emailToken preliminary formData link
+     -> HtmlT (AbsoluteUrlT SystemM) ()
+     -> FileExtListenerT SystemM ()
+html env colors emailToken preliminary formData link =
+  htmlLight env status200 . mainTemplate env colors emailToken preliminary formData link
 
 
 -- TODO Consolidate instance arguments into datum
 
 -- | Top-level scaffolding for the site
 masterPage :: LocalCookingSiteLinks siteLinks
-           => LocalCookingColors -- ^ Site colors
+           => Env
+           -> LocalCookingColors -- ^ Site colors
            -> Maybe EmailToken -- ^ Fetched from @?emailToken=...@ query parameter - email confirmation
            -> PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
            -> Maybe FacebookLoginUnsavedFormData -- ^ Fetched from @?formData=...@ query parameter
            -> siteLinks -- ^ Site link being represented
-           -> WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
-masterPage LocalCookingColors{..} emailToken preliminary formData link =
-  let page :: WebPage (HtmlT (AbsoluteUrlT AppM) ()) T.Text [Attribute]
+           -> WebPage (HtmlT (AbsoluteUrlT SystemM) ()) T.Text [Attribute]
+masterPage env LocalCookingColors{..} emailToken preliminary formData link =
+  let page :: WebPage (HtmlT (AbsoluteUrlT SystemM) ()) T.Text [Attribute]
       page = def
   in  page
         { metaVars = do
@@ -141,14 +144,14 @@ masterPage LocalCookingColors{..} emailToken preliminary formData link =
               , keysGoogle = GoogleCredentials{googleAnalytics,googleReCaptcha}
               }
             , systemEnvSalt
-            } <- lift $ lift $ liftSystem getSystemEnv
+            } <- lift $ lift getSystemEnv
 
           -- Google Analytics
           script_ [async_ "", src_ $ printURI $ googleAnalyticsGTagToURI googleAnalytics] ("" :: T.Text)
           script_ [src_ $ printURI googleReCaptchaAssetURI] ("" :: T.Text)
           script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ googleAnalyticsScript googleAnalytics
 
-          env <- lift (lift getEnv)
+          -- env <- lift (lift getEnv)
         
           -- FrontendEnv
           let frontendEnv = FrontendEnv
@@ -192,15 +195,16 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 
 -- | Inject some HTML into the @<body>@ tag of our template
 mainTemplate :: LocalCookingSiteLinks siteLinks
-             => LocalCookingColors
+             => Env
+             -> LocalCookingColors
              -> Maybe EmailToken
              -> PreliminaryAuthToken
              -> Maybe FacebookLoginUnsavedFormData
              -> siteLinks
-             -> HtmlT (AbsoluteUrlT AppM) ()
-             -> HtmlT (AbsoluteUrlT AppM) ()
-mainTemplate colors emailToken preliminary formData =
-  template . masterPage colors emailToken preliminary formData
+             -> HtmlT (AbsoluteUrlT SystemM) ()
+             -> HtmlT (AbsoluteUrlT SystemM) ()
+mainTemplate env colors emailToken preliminary formData =
+  template . masterPage env colors emailToken preliminary formData
 
 
 
