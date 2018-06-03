@@ -23,7 +23,8 @@ HTML Rendering tools
 
 module LocalCooking.Template where
 
-import           LocalCooking.Function.System (AppM, Keys (..), SystemEnv (..))
+import           LocalCooking.Types (AppM, getEnv, isDevelopment, Env (..), liftSystem)
+import           LocalCooking.Function.System (Keys (..), SystemEnv (..), getSystemEnv)
 -- import           LocalCooking.Types (AppM)
 -- import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
 import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
@@ -77,9 +78,10 @@ htmlLight :: Status
           -> FileExtListenerT AppM ()
 htmlLight s content = do
   htmlBS <- lift $ do
-    Env{envHostname,envTls} <- ask
-    let locationToURI = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname
-    runAbsoluteUrlT (renderBST content) locationToURI
+    Env{envMkURI} <- getEnv
+    -- Env{envHostname,envTls} <- ask
+    -- let locationToURI = packLocation (Strict.Just $ if envTls then "https" else "http") True envHostname
+    runAbsoluteUrlT (renderBST content) envMkURI -- locationToURI
 
   bytestring CT.Html htmlBS
   modify . HM.map $ mapStatus (const s)
@@ -133,25 +135,27 @@ masterPage LocalCookingColors{..} emailToken preliminary formData link =
           -- Env{envDevelopment = mDev} <- lift ask -- TODO dev env
           deploy M.JavaScript M.Remote $ toLocation $ IndexJs Nothing -- $ devCacheBuster <$> mDev
         , afterStylesScripts = do
-          env@Env
-            { envKeys = Keys
-              { keysFacebook = Credentials{clientId}
+          SystemEnv
+            { systemEnvKeys = Keys
+              { keysFacebook = FacebookAppCredentials{clientId}
               , keysGoogle = GoogleCredentials{googleAnalytics,googleReCaptcha}
               }
-            , envSalt
-            } <- lift ask
+            , systemEnvSalt
+            } <- lift $ lift $ liftSystem getSystemEnv
 
           -- Google Analytics
           script_ [async_ "", src_ $ printURI $ googleAnalyticsGTagToURI googleAnalytics] ("" :: T.Text)
           script_ [src_ $ printURI googleReCaptchaAssetURI] ("" :: T.Text)
           script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ googleAnalyticsScript googleAnalytics
 
+          env <- lift (lift getEnv)
+        
           -- FrontendEnv
           let frontendEnv = FrontendEnv
                 { frontendEnvDevelopment = isDevelopment env
                 , frontendEnvFacebookClientID = clientId
                 , frontendEnvGoogleReCaptchaSiteKey = googleReCaptcha
-                , frontendEnvSalt = envSalt
+                , frontendEnvSalt = systemEnvSalt
                 , frontendEnvEmailToken = emailToken
                 , frontendEnvAuthToken = preliminary
                 , frontendEnvFormData = formData
