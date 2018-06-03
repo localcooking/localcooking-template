@@ -24,14 +24,18 @@ Portability: GHC
 module LocalCooking.Server.HTTP where
 
 import LocalCooking.Server.Assets (privacyPolicy)
-import LocalCooking.Server.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInFacebookCode), AuthTokenInitOut (..), AuthTokenFailure (..), PreliminaryAuthToken (..))
-import LocalCooking.Types (AppM)
-import LocalCooking.Types.Env (Env (..), Development (..))
+import LocalCooking.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInSocialLogin), AuthTokenInitOut (..), AuthTokenFailure (..), PreliminaryAuthToken (..))
+import LocalCooking.Types (AppM, getEnv, liftSystem, Env (..), showCacheBuster)
+import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB))
+import LocalCooking.Function.Common (confirmEmail)
+import LocalCooking.Function.System (SystemM)
+-- import LocalCooking.Types (AppM)
+-- import LocalCooking.Types.Env (Env (..), Development (..))
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Colors (LocalCookingColors)
-import LocalCooking.Database.Query.User (removePendingEmail)
+-- import LocalCooking.Database.Query.User (removePendingEmail)
 import Facebook.Types (FacebookLoginCode (..))
 import Facebook.State (FacebookLoginState (..), FacebookLoginUnsavedFormData (..))
 
@@ -55,7 +59,8 @@ import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.HashMap.Strict as HashMap
-import Path.Extended ((<&>), ToLocation (..), FromLocation)
+import Path (absdir)
+import Path.Extended ((<&>), ToLocation (..), FromLocation, fromAbsDir)
 import Text.Heredoc (here)
 import Control.Applicative ((<|>))
 import Control.Monad (join, forM_)
@@ -88,7 +93,8 @@ router
   Proxy
   handles
   = do
-  Env{envHostname,envTls} <- lift ask
+  Env{envMkURI} <- lift getEnv
+  -- Env{envHostname,envTls} <- lift ask
 
   -- Turns a handled route's potential `?authToken=<preliminary>` into a FrontendEnv
   let handleAuthToken :: siteLinks
@@ -108,12 +114,13 @@ router
   match (l_ "register" </> o_) (handleAuthToken registerLink)
   handles handleAuthToken
   matchAny $ \_ _ resp -> do
-    let redirectUri = URI (Strict.Just $ if envTls then "https" else "http")
-                          True
-                          envHostname
-                          []
-                          []
-                          Strict.Nothing
+    let redirectUri = envMkURI $ fromAbsDir [absdir|/|]
+          -- URI (Strict.Just $ if envTls then "https" else "http")
+          -- True
+          -- envHostname
+          -- []
+          -- []
+          -- Strict.Nothing
     resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
 
   match (l_ "robots" </> o_) $ action $ get $ text [here|User-agent: *
@@ -134,40 +141,45 @@ Disallow: /facebookLoginDeauthorize
 
   -- application
   match (l_ "index" </> o_) $ \app req resp -> do
-    Env{envDevelopment} <- ask
+    Env{envDevelopment} <- getEnv
     let mid = case envDevelopment of
           Nothing -> action $ get $ bytestring JavaScript $ LBS.fromStrict frontendMin
-          Just Development{devCacheBuster} -> case join $ lookup "cache_buster" $ queryString req of
+          Just dev -> case join $ lookup "cache_buster" $ queryString req of
             Nothing -> fail "No cache busting parameter!"
             Just cacheBuster
-              | cacheBuster == BS16.encode (NaCl.encode devCacheBuster) ->
+              | cacheBuster == BS16.encode (showCacheBuster dev) ->
                   action $ get $ bytestring JavaScript $ LBS.fromStrict frontend
               | otherwise -> fail "Wrong cache buster!" -- FIXME make cache buster generic
     mid app req resp
 
   match (l_ "emailConfirm" </> o_) $ \app req resp -> do
-    let redirectUri = URI (Strict.Just $ if envTls then "https" else "http")
-                          True
-                          envHostname
-                          []
-                          []
-                          Strict.Nothing
+    let redirectUri = envMkURI $ fromAbsDir [absdir|/|]
+        -- URI (Strict.Just $ if envTls then "https" else "http")
+        -- True
+        -- envHostname
+        -- []
+        -- []
+        -- Strict.Nothing
         def = resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
     case join $ lookup "emailToken" $ queryString req of
       Nothing -> def
       Just json -> case Aeson.decode (LBS.fromStrict json) of
         Nothing -> def
         Just emailToken -> do
-          Env{envPendingEmail,envDatabase} <- ask
-          mUid <- liftIO $ atomically $ do
-            xs <- readTVar envPendingEmail
-            let mx = HashMap.lookup emailToken xs
-            writeTVar envPendingEmail (HashMap.delete emailToken xs)
-            pure mx
-          case mUid of
-            Nothing -> def
-            Just uid -> do
-              liftIO (removePendingEmail envDatabase uid)
+          removed <- liftSystem (confirmEmail emailToken)
+          -- Env{envPendingEmail,envDatabase} <- ask
+          -- mUid <- liftIO $ atomically $ do
+          --   xs <- readTVar envPendingEmail
+          --   let mx = HashMap.lookup emailToken xs
+          --   writeTVar envPendingEmail (HashMap.delete emailToken xs)
+          --   pure mx
+          -- case mUid of
+          --   Nothing -> def
+          --   Just uid -> do
+          --     liftIO (removePendingEmail envDatabase uid)
+          if not removed
+            then fail "No pending email token!"
+            else
               (action $ get $ html colors
                 (Just emailToken)
                 (PreliminaryAuthToken Nothing)
@@ -201,11 +213,11 @@ Disallow: /facebookLoginDeauthorize
               Just eX -> case eX of
                 Left e -> pure (Left e, Nothing)
                 -- Successfully fetched the fbCode and FacebookState from query string
-                Right (code, state) -> do
+                Right (code, state) -> liftSystem $ do
                   -- NOTE ** Server Call Site
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
-                  ( mCont :: Maybe (ServerContinue AppM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
-                    ) <- authTokenServer (AuthTokenInitInFacebookCode code)
+                  ( mCont :: Maybe (ServerContinue SystemM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
+                    ) <- authTokenServer $ AuthTokenInitInSocialLogin $ SocialLoginFB code -- FIXME this should be pre-decoded
                   case mCont of
                     Nothing -> pure (Left FBLoginReturnBadParse, Just state)
                     Just ServerContinue{serverContinue} -> do
@@ -218,11 +230,11 @@ Disallow: /facebookLoginDeauthorize
                           pure (Left e, Just state)
 
     let redirectUri :: URI
-        redirectUri =
-          packLocation
-            (Strict.Just $ if envTls then "https" else "http")
-            True
-            envHostname $ case mFbState of
+        redirectUri = envMkURI $
+          -- packLocation
+          --   (Strict.Just $ if envTls then "https" else "http")
+          --   True
+           {- envHostname $--} case mFbState of
               -- Facebook rejected it
               Nothing ->
                 let loc = toLocation (rootLink :: siteLinks)
