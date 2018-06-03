@@ -22,7 +22,8 @@ module LocalCooking.Server where
 
 import LocalCooking.Server.HTTP (httpServer)
 import LocalCooking.Dependencies (dependencies)
-import LocalCooking.Types (AppM)
+import LocalCooking.Types (Env)
+import LocalCooking.Function.System (SystemM)
 -- import LocalCooking.Types.Env (Env (..), TokenContexts (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Colors (LocalCookingColors)
@@ -51,9 +52,9 @@ data LocalCookingArgs siteLinks sec = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString -- ^ Raw frontend javascript
   , localCookingArgsFrontendMin :: BS.ByteString -- ^ Raw minified frontend javascript
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)] -- ^ Favicon directory asset contents
-  , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT AppM)
-                                -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Casual HTTP links
-  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT AppM) [] AppM () -- ^ Casual Sparrow dependencies
+  , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT SystemM)
+                                -> RouterT (MiddlewareT SystemM) sec SystemM () -- ^ Casual HTTP links
+  , localCookingArgsDeps        :: SparrowServerT (MiddlewareT SystemM) [] SystemM () -- ^ Casual Sparrow dependencies
   , localCookingArgsColors      :: LocalCookingColors -- ^ Site-wide colors
   }
 
@@ -63,15 +64,17 @@ server :: forall sec siteLinks
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
        => ToLocation siteLinks
-       => Int -- ^ Port to bind to
+       => Env
+       -> Int -- ^ Port to bind to
        -> LocalCookingArgs siteLinks sec
-       -> AppM ()
-server port LocalCookingArgs{..} = do
+       -> SystemM ()
+server env port LocalCookingArgs{..} = do
   -- HTTP Server
   liftBaseWith $ \runInBase -> do
     ds <- runSingleton <$> runInBase (serveDependencies (dependencies localCookingArgsDeps))
     server' <- fmap runSingleton $ runInBase $ runApplicationT $
       httpServer
+        env
         localCookingArgsFrontend
         localCookingArgsFrontendMin
         localCookingArgsFavicons
@@ -84,5 +87,5 @@ server port LocalCookingArgs{..} = do
 
 
 -- | Simple @404@ response
-defApp :: ApplicationT AppM
+defApp :: ApplicationT SystemM
 defApp _ respond = respond (textOnly "404" status404 [])

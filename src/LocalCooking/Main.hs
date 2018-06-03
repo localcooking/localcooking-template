@@ -22,9 +22,10 @@ This is the top-level entry point for a Local Cooking server - use the
 module LocalCooking.Main where
 
 import LocalCooking.Server (LocalCookingArgs, server)
--- import LocalCooking.Types (AppM, runAppM)
+import LocalCooking.Types (Env (..), newDevelopment)
+-- import LocalCooking.Types (SystemM, runSystemM)
 -- import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts, releaseEnv)
-import LocalCooking.Function.System (SystemEnv (..), execAppM, AppM)
+import LocalCooking.Function.System (SystemEnv (..), execSystemM, SystemM, NewSystemEnvArgs (..), Keys (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
 import LocalCooking.Database.Schema (migrateAll)
@@ -33,14 +34,16 @@ import Options.Applicative (Parser, execParser, info, helper, fullDesc, progDesc
 import qualified Data.Text as T
 import Data.Attoparsec.Text (parseOnly)
 import Data.Attoparsec.Path (absFilePath)
+import Data.URI (URI (..))
 import Data.URI.Auth (parseURIAuth, URIAuth (..))
 import Data.URI.Auth.Host (parseURIAuthHost)
+import Data.Url (packLocation)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.UTF8 as BS8
 import Data.Monoid ((<>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Strict.Maybe as Strict
-import Data.Insert.Class (Insertable)
+-- import Data.Insert.Class (Insertable)
 import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative (Alternative)
 import Control.Monad (unless)
@@ -116,7 +119,7 @@ args username = ArgsImpl
 
 -- | Marshalls the 'ArgsImpl' data into functional references and shared resource pools
 -- in 'LocalCooking.Types.Env.Env', and the port to bind to.
-mkSystemEnv :: ArgsImpl -> IO (NewSystemEnvArgs, Int)
+mkSystemEnv :: ArgsImpl -> IO (NewSystemEnvArgs, Env, Int)
 mkSystemEnv
   ArgsImpl
     { argsImplSecretKey
@@ -160,13 +163,18 @@ mkSystemEnv
         , dbName = T.pack argsImplDbName
         , keys
         , facebookRedirect = URI
-            (Strict.Just $ if argsImplTls "https" else "http")
+            (Strict.Just $ if argsImplTls then "https" else "http")
             True
             publicHostname
             ["facebookLoginReturn"] -- TODO ensure route exists
             []
             Strict.Nothing
         }
+
+  envDevelopment <-
+    if argsImplProduction
+      then pure Nothing
+      else Just <$> newDevelopment
 
   -- migrateAll systemEnvDatabase
 
@@ -181,6 +189,13 @@ mkSystemEnv
 
   pure
     ( newSystemEnvArgs
+    , Env
+      { envMkURI = packLocation
+        (Strict.Just $ if argsImplTls then "https" else "http")
+        True
+        publicHostname
+      , envDevelopment
+      }
     , fromIntegral boundPort
     )
 
@@ -191,18 +206,18 @@ defaultMain :: LocalCookingSiteLinks siteLinks
             => FromLocation siteLinks
             => ToLocation siteLinks
             => String -- ^ CLI Invocation heading - i.e. \"@Local Cooking Farms - farm.localcooking.com daemon@\"
-            -> LocalCookingArgs siteLinks sec [] -- ^ Arguments
+            -> LocalCookingArgs siteLinks sec -- ^ Arguments
             -> IO ()
 defaultMain head' lcArgs = do
   username <- getEnv "USER"
   cliArgs <- execParser (opts username)
-  (envArgs,boundPort) <- mkSystemEnv cliArgs
+  (newSystemArgs,env,boundPort) <- mkSystemEnv cliArgs
 
   withStderrLogging $
-    execAppM
-      envArgs
+    execSystemM
+      newSystemArgs
       (\SystemEnv{systemEnvDatabase} -> migrateAll systemEnvDatabase)
-      (server port lcArgs)
+      (server env boundPort lcArgs)
 
   where
     opts u = info (helper <*> args u) $ fullDesc <> progDesc desc <> header head'

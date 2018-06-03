@@ -25,11 +25,11 @@ module LocalCooking.Server.HTTP where
 
 import LocalCooking.Server.Assets (privacyPolicy)
 import LocalCooking.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInSocialLogin), AuthTokenInitOut (..), AuthTokenFailure (..), PreliminaryAuthToken (..))
-import LocalCooking.Types (AppM, getEnv, liftSystem, Env (..), showCacheBuster)
+import LocalCooking.Types (Env (..), showCacheBuster)
 import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB))
 import LocalCooking.Function.Common (confirmEmail)
 import LocalCooking.Function.System (SystemM)
--- import LocalCooking.Types (AppM)
+-- import LocalCooking.Types (SystemM)
 -- import LocalCooking.Types.Env (Env (..), Development (..))
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
@@ -78,14 +78,16 @@ router :: forall siteLinks sec
         . LocalCookingSiteLinks siteLinks
        => FromLocation siteLinks
        => ToLocation siteLinks
-       => BS.ByteString -- ^ Unminified
+       => Env
+       -> BS.ByteString -- ^ Unminified
        -> BS.ByteString -- ^ Minified
        -> [(FilePath, BS.ByteString)] -- ^ Favicons
        -> LocalCookingColors
        -> Proxy siteLinks
-       -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ Casual HTTP endpoints
-       -> RouterT (MiddlewareT AppM) sec AppM ()
+       -> ((siteLinks -> MiddlewareT SystemM) -> RouterT (MiddlewareT SystemM) sec SystemM ()) -- ^ Casual HTTP endpoints
+       -> RouterT (MiddlewareT SystemM) sec SystemM ()
 router
+  env@Env{envMkURI,envDevelopment}
   frontend
   frontendMin
   favicons
@@ -93,12 +95,12 @@ router
   Proxy
   handles
   = do
-  Env{envMkURI} <- lift getEnv
+  -- Env{envMkURI} <- lift getEnv
   -- Env{envHostname,envTls} <- lift ask
 
   -- Turns a handled route's potential `?authToken=<preliminary>` into a FrontendEnv
   let handleAuthToken :: siteLinks
-                      -> MiddlewareT AppM
+                      -> MiddlewareT SystemM
       handleAuthToken link app req resp =
         let preliminary = case join $ lookup "authToken" $ queryString req of
               Nothing -> PreliminaryAuthToken Nothing
@@ -106,7 +108,7 @@ router
             formData = case join $ lookup "formData" $ queryString req of
               Nothing -> Nothing
               Just json -> Aeson.decode (LBS.fromStrict json)
-        in  (action $ get $ html colors Nothing preliminary formData link "") app req resp
+        in  (action $ get $ html env colors Nothing preliminary formData link "") app req resp
 
   -- main routes
   matchHere (handleAuthToken rootLink)
@@ -141,7 +143,7 @@ Disallow: /facebookLoginDeauthorize
 
   -- application
   match (l_ "index" </> o_) $ \app req resp -> do
-    Env{envDevelopment} <- getEnv
+    -- Env{envDevelopment} <- getEnv
     let mid = case envDevelopment of
           Nothing -> action $ get $ bytestring JavaScript $ LBS.fromStrict frontendMin
           Just dev -> case join $ lookup "cache_buster" $ queryString req of
@@ -166,7 +168,7 @@ Disallow: /facebookLoginDeauthorize
       Just json -> case Aeson.decode (LBS.fromStrict json) of
         Nothing -> def
         Just emailToken -> do
-          removed <- liftSystem (confirmEmail emailToken)
+          removed <- confirmEmail emailToken
           -- Env{envPendingEmail,envDatabase} <- ask
           -- mUid <- liftIO $ atomically $ do
           --   xs <- readTVar envPendingEmail
@@ -180,7 +182,7 @@ Disallow: /facebookLoginDeauthorize
           if not removed
             then fail "No pending email token!"
             else
-              (action $ get $ html colors
+              (action $ get $ html env colors
                 (Just emailToken)
                 (PreliminaryAuthToken Nothing)
                 Nothing (rootLink :: siteLinks) "") app req resp
@@ -213,7 +215,7 @@ Disallow: /facebookLoginDeauthorize
               Just eX -> case eX of
                 Left e -> pure (Left e, Nothing)
                 -- Successfully fetched the fbCode and FacebookState from query string
-                Right (code, state) -> liftSystem $ do
+                Right (code, state) -> do
                   -- NOTE ** Server Call Site
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
                   ( mCont :: Maybe (ServerContinue SystemM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
@@ -288,15 +290,16 @@ Disallow: /facebookLoginDeauthorize
 httpServer :: LocalCookingSiteLinks siteLinks
            => FromLocation siteLinks
            => ToLocation siteLinks
-           => BS.ByteString -- ^ Unminified
+           => Env
+           -> BS.ByteString -- ^ Unminified
            -> BS.ByteString -- ^ Minified
            -> [(FilePath, BS.ByteString)] -- ^ Favicons
            -> LocalCookingColors
            -> Proxy siteLinks
-           -> ((siteLinks -> MiddlewareT AppM) -> RouterT (MiddlewareT AppM) sec AppM ()) -- ^ HTTP handlers
-           -> RouterT (MiddlewareT AppM) sec AppM () -- ^ Dependencies, post sparrow serving
-           -> MiddlewareT AppM
-httpServer frontend frontendEnv favicons colors siteLinks handlers dependencies =
+           -> ((siteLinks -> MiddlewareT SystemM) -> RouterT (MiddlewareT SystemM) sec SystemM ()) -- ^ HTTP handlers
+           -> RouterT (MiddlewareT SystemM) sec SystemM () -- ^ Dependencies, post sparrow serving
+           -> MiddlewareT SystemM
+httpServer env frontend frontendEnv favicons colors siteLinks handlers dependencies =
   route $ do
     dependencies
-    router frontend frontendEnv favicons colors siteLinks handlers
+    router env frontend frontendEnv favicons colors siteLinks handlers

@@ -8,7 +8,7 @@
   #-}
 
 module LocalCooking.Types
-  ( Development, showCacheBuster, Env (..), isDevelopment
+  ( Development, showCacheBuster, Env (..), isDevelopment, newDevelopment
   ) where
 
 import Data.URI (URI)
@@ -23,7 +23,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Control.Monad.Trans.Control.Aligned as Aligned
 import Control.Monad.Trans.Unlift (MonadBaseUnlift)
 import Control.Monad.Reader (ReaderT, ask)
-import Crypto.Saltine.Core.Box (Nonce)
+import Crypto.Saltine.Core.Box (Nonce, newNonce)
 import qualified Crypto.Saltine.Class as NaCl
 import Path.Extended (Location)
 
@@ -35,6 +35,9 @@ data Development = Development
 
 showCacheBuster :: Development -> ByteString
 showCacheBuster Development{devCacheBuster} = NaCl.encode devCacheBuster
+
+newDevelopment :: IO Development
+newDevelopment = Development <$> newNonce
 
 
 data Env = Env
