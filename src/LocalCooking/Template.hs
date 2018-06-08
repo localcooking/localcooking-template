@@ -27,7 +27,7 @@ import           LocalCooking.Types (isDevelopment, Env (..))
 import           LocalCooking.Function.System (SystemM, Keys (..), SystemEnv (..), getSystemEnv)
 -- import           LocalCooking.Types (SystemM)
 -- import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
-import           LocalCooking.Types.FrontendEnv (FrontendEnv (..))
+import           LocalCooking.Types.ServerToClient (ServerToClient (..))
 -- import           LocalCooking.Types.Keys (Keys (..))
 import           LocalCooking.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
@@ -153,17 +153,17 @@ masterPage env LocalCookingColors{..} emailToken preliminary formData link =
 
           -- env <- lift (lift getEnv)
         
-          -- FrontendEnv
-          let frontendEnv = FrontendEnv
-                { frontendEnvDevelopment = isDevelopment env
-                , frontendEnvFacebookClientID = clientId
-                , frontendEnvGoogleReCaptchaSiteKey = googleReCaptcha
-                , frontendEnvSalt = systemEnvSalt
-                , frontendEnvEmailToken = emailToken
-                , frontendEnvAuthToken = preliminary
-                , frontendEnvFormData = formData
+          -- ServerToClient
+          let serverToClient = ServerToClient
+                { serverToClientDevelopment = isDevelopment env
+                , serverToClientFacebookClientID = clientId
+                , serverToClientGoogleReCaptchaSiteKey = googleReCaptcha
+                , serverToClientSalt = systemEnvSalt
+                , serverToClientEmailToken = emailToken
+                , serverToClientAuthToken = preliminary
+                , serverToClientFormData = formData
                 }
-          script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ inlineScripts frontendEnv
+          script_ [] $ renderJavascriptUrl (\_ _ -> undefined) $ inlineScripts serverToClient
         }
   where
     inlineStyles = [lucius|
@@ -181,8 +181,8 @@ body {
   padding-bottom: 5em;
 }|]
 
-    inlineScripts frontendEnv = [julius|
-var frontendEnv = #{Aeson.toJSON frontendEnv}
+    inlineScripts serverToClient = [julius|
+var serverToClient = #{Aeson.toJSON serverToClient}
 |]
 
     googleAnalyticsScript gTag = [julius|
