@@ -52,7 +52,8 @@ data LocalCookingArgs siteLinks sec = LocalCookingArgs
   { localCookingArgsFrontend    :: BS.ByteString -- ^ Raw frontend javascript
   , localCookingArgsFrontendMin :: BS.ByteString -- ^ Raw minified frontend javascript
   , localCookingArgsFavicons    :: [(FilePath, BS.ByteString)] -- ^ Favicon directory asset contents
-  , localCookingArgsHTTP        :: (siteLinks -> MiddlewareT SystemM)
+  , localCookingArgsHTTP        :: Env
+                                -> (siteLinks -> MiddlewareT SystemM)
                                 -> RouterT (MiddlewareT SystemM) sec SystemM () -- ^ Casual HTTP links
   , localCookingArgsDeps        :: SparrowServerT (MiddlewareT SystemM) [] SystemM () -- ^ Casual Sparrow dependencies
   , localCookingArgsColors      :: LocalCookingColors -- ^ Site-wide colors
@@ -80,7 +81,7 @@ server env port LocalCookingArgs{..} = do
         localCookingArgsFavicons
         localCookingArgsColors
         (Proxy :: Proxy siteLinks)
-        localCookingArgsHTTP
+        (localCookingArgsHTTP env)
         ds
         defApp
     runEnv port server'
