@@ -28,7 +28,6 @@ import LocalCooking.Types (Env (..), newDevelopment)
 import LocalCooking.Function.System (SystemEnv (..), execSystemM, SystemM, NewSystemEnvArgs (..), Keys (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
 import LocalCooking.Database.Query.Salt (getPasswordSalt)
-import LocalCooking.Database.Schema (migrateAll)
 
 import Options.Applicative (Parser, execParser, info, helper, fullDesc, progDesc, header, strOption, option, switch, auto, long, help, value, showDefault)
 import qualified Data.Text as T
@@ -216,7 +215,6 @@ defaultMain head' lcArgs = do
   withStderrLogging $
     execSystemM
       newSystemArgs
-      (\SystemEnv{systemEnvDatabase} -> migrateAll systemEnvDatabase)
       (server env boundPort lcArgs)
 
   where
