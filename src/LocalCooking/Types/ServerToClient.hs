@@ -31,7 +31,7 @@ data ServerToClient = ServerToClient
   , serverToClientFacebookClientID       :: FacebookClientId -- ^ For Facebook login
   , serverToClientGoogleReCaptchaSiteKey :: ReCaptchaSiteKey -- ^ Public ReCaptcha API key
   , serverToClientEmailToken             :: Maybe EmailToken
-  , serverToClientAuthToken              :: PreliminaryAuthToken -- ^ Parsed from @?authToken=...@ query string
+  , serverToClientAuthToken              :: Maybe PreliminaryAuthToken -- ^ Parsed from @?authToken=...@ query string
   , serverToClientFormData               :: Maybe FacebookLoginUnsavedFormData -- ^ Parsed from @?formData=...@ query string
   , serverToClientSalt                   :: HashedPassword -- ^ Public, static, 32-bit password salt
   }

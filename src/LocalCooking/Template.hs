@@ -94,7 +94,7 @@ html :: LocalCookingSiteLinks siteLinks
      => Env
      -> LocalCookingColors
      -> Maybe EmailToken
-     -> PreliminaryAuthToken
+     -> Maybe PreliminaryAuthToken
      -> Maybe FacebookLoginUnsavedFormData
      -> siteLinks
      -> HtmlT (AbsoluteUrlT SystemM) ()
@@ -110,7 +110,7 @@ masterPage :: LocalCookingSiteLinks siteLinks
            => Env
            -> LocalCookingColors -- ^ Site colors
            -> Maybe EmailToken -- ^ Fetched from @?emailToken=...@ query parameter - email confirmation
-           -> PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
+           -> Maybe PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
            -> Maybe FacebookLoginUnsavedFormData -- ^ Fetched from @?formData=...@ query parameter
            -> siteLinks -- ^ Site link being represented
            -> WebPage (HtmlT (AbsoluteUrlT SystemM) ()) T.Text [Attribute]
@@ -198,7 +198,7 @@ mainTemplate :: LocalCookingSiteLinks siteLinks
              => Env
              -> LocalCookingColors
              -> Maybe EmailToken
-             -> PreliminaryAuthToken
+             -> Maybe PreliminaryAuthToken
              -> Maybe FacebookLoginUnsavedFormData
              -> siteLinks
              -> HtmlT (AbsoluteUrlT SystemM) ()

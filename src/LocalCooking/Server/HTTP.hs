@@ -103,8 +103,8 @@ router
                       -> MiddlewareT SystemM
       handleAuthToken link app req resp =
         let preliminary = case join $ lookup "authToken" $ queryString req of
-              Nothing -> PreliminaryAuthToken Nothing
-              Just json -> fromMaybe (PreliminaryAuthToken Nothing) (Aeson.decode (LBS.fromStrict json))
+              Nothing -> Nothing
+              Just json -> Aeson.decode (LBS.fromStrict json)
             formData = case join $ lookup "formData" $ queryString req of
               Nothing -> Nothing
               Just json -> Aeson.decode (LBS.fromStrict json)
@@ -184,7 +184,7 @@ Disallow: /facebookLoginDeauthorize
             else
               (action $ get $ html env colors
                 (Just emailToken)
-                (PreliminaryAuthToken Nothing)
+                Nothing
                 Nothing (rootLink :: siteLinks) "") app req resp
 
   -- TODO handle authenticated linking
@@ -241,7 +241,7 @@ Disallow: /facebookLoginDeauthorize
               Nothing ->
                 let loc = toLocation (rootLink :: siteLinks)
                 in  loc <&> ( "authToken"
-                            , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                            , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
                             )
               Just FacebookLoginState{..} ->
                 case eToken of
@@ -249,7 +249,7 @@ Disallow: /facebookLoginDeauthorize
                   Left (FBLoginReturnNoUser fbUserId) ->
                     let loc = toLocation (registerLink :: siteLinks)
                     in  loc <&> ( "authToken"
-                                , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                                , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
                                 )
                             <&> ( "formData"
                                 , Just $ LBS8.toString $ Aeson.encode $ case facebookLoginStateFormData of
@@ -267,7 +267,7 @@ Disallow: /facebookLoginDeauthorize
                     let loc = toLocation facebookLoginStateOrigin
                         -- Add `?authToken=<preliminary>` query param to redirect origin
                         loc' = loc <&> ( "authToken"
-                                       , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken $ Just eToken
+                                       , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
                                        )
                     in  case facebookLoginStateFormData of
                           Just formData ->
