@@ -156,36 +156,17 @@ Disallow: /facebookLoginDeauthorize
 
   match (l_ "emailConfirm" </> o_) $ \app req resp -> do
     let redirectUri = envMkURI $ fromAbsDir [absdir|/|]
-        -- URI (Strict.Just $ if envTls then "https" else "http")
-        -- True
-        -- envHostname
-        -- []
-        -- []
-        -- Strict.Nothing
         def = resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
     case join $ lookup "emailToken" $ queryString req of
       Nothing -> def
       Just json -> case Aeson.decode (LBS.fromStrict json) of
         Nothing -> def
         Just emailToken -> do
-          removed <- confirmEmail emailToken
-          -- Env{envPendingEmail,envDatabase} <- ask
-          -- mUid <- liftIO $ atomically $ do
-          --   xs <- readTVar envPendingEmail
-          --   let mx = HashMap.lookup emailToken xs
-          --   writeTVar envPendingEmail (HashMap.delete emailToken xs)
-          --   pure mx
-          -- case mUid of
-          --   Nothing -> def
-          --   Just uid -> do
-          --     liftIO (removePendingEmail envDatabase uid)
-          if not removed
-            then fail "No pending email token!"
-            else
-              (action $ get $ html env colors
-                (Just emailToken)
-                Nothing
-                Nothing (rootLink :: siteLinks) "") app req resp
+          mConfEmail <- confirmEmail emailToken
+          (action $ get $ html env colors
+            mConfEmail
+            Nothing
+            Nothing (rootLink :: siteLinks) "") app req resp
 
   -- TODO handle authenticated linking
   match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do

@@ -29,6 +29,7 @@ import           LocalCooking.Function.System (SystemM, Keys (..), SystemEnv (..
 -- import           LocalCooking.Types.Env (Env (..), Development (..), isDevelopment)
 import           LocalCooking.Types.ServerToClient (ServerToClient (..))
 -- import           LocalCooking.Types.Keys (Keys (..))
+import           LocalCooking.Semantics.Common (ConfirmEmailError)
 import           LocalCooking.Dependencies.AuthToken (PreliminaryAuthToken (..))
 import           LocalCooking.Colors (LocalCookingColors (..))
 import           LocalCooking.Links.Class (LocalCookingSiteLinks (toDocumentTitle))
@@ -93,14 +94,14 @@ htmlLight Env{envMkURI} s content = do
 html :: LocalCookingSiteLinks siteLinks
      => Env
      -> LocalCookingColors
-     -> Maybe EmailToken
+     -> Maybe ConfirmEmailError
      -> Maybe PreliminaryAuthToken
      -> Maybe FacebookLoginUnsavedFormData
      -> siteLinks
      -> HtmlT (AbsoluteUrlT SystemM) ()
      -> FileExtListenerT SystemM ()
-html env colors emailToken preliminary formData link =
-  htmlLight env status200 . mainTemplate env colors emailToken preliminary formData link
+html env colors mConfEmail preliminary formData link =
+  htmlLight env status200 . mainTemplate env colors mConfEmail preliminary formData link
 
 
 -- TODO Consolidate instance arguments into datum
@@ -109,12 +110,12 @@ html env colors emailToken preliminary formData link =
 masterPage :: LocalCookingSiteLinks siteLinks
            => Env
            -> LocalCookingColors -- ^ Site colors
-           -> Maybe EmailToken -- ^ Fetched from @?emailToken=...@ query parameter - email confirmation
+           -> Maybe ConfirmEmailError -- ^ Fetched from @?emailToken=...@ query parameter - email confirmation
            -> Maybe PreliminaryAuthToken -- ^ Fetched from @?authToken=...@ query parameter
            -> Maybe FacebookLoginUnsavedFormData -- ^ Fetched from @?formData=...@ query parameter
            -> siteLinks -- ^ Site link being represented
            -> WebPage (HtmlT (AbsoluteUrlT SystemM) ()) T.Text [Attribute]
-masterPage env LocalCookingColors{..} emailToken preliminary formData link =
+masterPage env LocalCookingColors{..} mConfEmail preliminary formData link =
   let page :: WebPage (HtmlT (AbsoluteUrlT SystemM) ()) T.Text [Attribute]
       page = def
   in  page
@@ -159,7 +160,7 @@ masterPage env LocalCookingColors{..} emailToken preliminary formData link =
                 , serverToClientFacebookClientId = clientId
                 , serverToClientGoogleReCaptchaSiteKey = googleReCaptcha
                 , serverToClientSalt = systemEnvSalt
-                , serverToClientEmailToken = emailToken
+                , serverToClientConfirmEmail = mConfEmail
                 , serverToClientAuthToken = preliminary
                 , serverToClientFormData = formData
                 }
@@ -197,14 +198,14 @@ gtag('config', #{Aeson.toJSON $ googleAnalyticsGTag gTag});
 mainTemplate :: LocalCookingSiteLinks siteLinks
              => Env
              -> LocalCookingColors
-             -> Maybe EmailToken
+             -> Maybe ConfirmEmailError
              -> Maybe PreliminaryAuthToken
              -> Maybe FacebookLoginUnsavedFormData
              -> siteLinks
              -> HtmlT (AbsoluteUrlT SystemM) ()
              -> HtmlT (AbsoluteUrlT SystemM) ()
-mainTemplate env colors emailToken preliminary formData =
-  template . masterPage env colors emailToken preliminary formData
+mainTemplate env colors mConfEmail preliminary formData =
+  template . masterPage env colors mConfEmail preliminary formData
 
 
 
