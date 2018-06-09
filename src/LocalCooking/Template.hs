@@ -156,7 +156,7 @@ masterPage env LocalCookingColors{..} emailToken preliminary formData link =
           -- ServerToClient
           let serverToClient = ServerToClient
                 { serverToClientDevelopment = isDevelopment env
-                , serverToClientFacebookClientID = clientId
+                , serverToClientFacebookClientId = clientId
                 , serverToClientGoogleReCaptchaSiteKey = googleReCaptcha
                 , serverToClientSalt = systemEnvSalt
                 , serverToClientEmailToken = emailToken

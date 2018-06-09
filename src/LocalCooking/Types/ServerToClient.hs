@@ -28,7 +28,7 @@ import Data.Aeson (ToJSON (..), (.=), object)
 -- | Data that gets passed to every client, as its environment
 data ServerToClient = ServerToClient
   { serverToClientDevelopment            :: Bool
-  , serverToClientFacebookClientID       :: FacebookClientId -- ^ For Facebook login
+  , serverToClientFacebookClientId       :: FacebookClientId -- ^ For Facebook login
   , serverToClientGoogleReCaptchaSiteKey :: ReCaptchaSiteKey -- ^ Public ReCaptcha API key
   , serverToClientEmailToken             :: Maybe EmailToken
   , serverToClientAuthToken              :: Maybe PreliminaryAuthToken -- ^ Parsed from @?authToken=...@ query string
@@ -40,7 +40,7 @@ instance ToJSON ServerToClient where
   toJSON
     ServerToClient
       { serverToClientDevelopment
-      , serverToClientFacebookClientID
+      , serverToClientFacebookClientId
       , serverToClientGoogleReCaptchaSiteKey
       , serverToClientEmailToken
       , serverToClientAuthToken
@@ -48,7 +48,7 @@ instance ToJSON ServerToClient where
       , serverToClientSalt
       } = object
     [ "development" .= serverToClientDevelopment
-    , "facebookClientID" .= serverToClientFacebookClientID
+    , "facebookClientId" .= serverToClientFacebookClientId
     , "googleReCaptchaSiteKey" .= serverToClientGoogleReCaptchaSiteKey
     , "emailToken" .= serverToClientEmailToken
     , "authToken" .= serverToClientAuthToken
