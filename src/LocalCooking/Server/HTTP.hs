@@ -162,9 +162,9 @@ Disallow: /facebookLoginDeauthorize
       Just json -> case Aeson.decode (LBS.fromStrict json) of
         Nothing -> def
         Just emailToken -> do
-          mConfEmail <- confirmEmail emailToken
+          confEmail <- confirmEmail emailToken
           (action $ get $ html env colors
-            mConfEmail
+            (Just confEmail)
             Nothing
             Nothing (rootLink :: siteLinks) "") app req resp
 
