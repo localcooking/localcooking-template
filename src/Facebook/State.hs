@@ -17,7 +17,7 @@ Portability: GHC
 
 module Facebook.State where
 
-import Facebook.Types (FacebookUserId)
+import LocalCooking.Semantics.Common (SocialLoginForm)
 
 import Data.Aeson (ToJSON (..), FromJSON (..), object, (.=), (.:), Value (Object, String))
 import Data.Aeson.Types (typeMismatch)
@@ -35,30 +35,31 @@ data FacebookLoginUnsavedFormData
     FacebookLoginUnsavedFormDataRegister
     { facebookLoginUnsavedFormDataRegisterEmail        :: Text
     , facebookLoginUnsavedFormDataRegisterEmailConfirm :: Text
-    , facebookLoginUnsavedFormDataRegisterFBUserId     :: Maybe FacebookUserId
+    , facebookLoginUnsavedFormDataRegisterSocialLogin  :: SocialLoginForm
     }
   | -- | Security page
     FacebookLoginUnsavedFormDataSecurity
     { facebookLoginUnsavedFormDataSecurityEmail        :: Text
     , facebookLoginUnsavedFormDataSecurityEmailConfirm :: Text
+    , facebookLoginUnsavedFormDataSecuritySocialLogin  :: SocialLoginForm
     }
 
 instance ToJSON FacebookLoginUnsavedFormData where
   toJSON x = case x of
-    FacebookLoginUnsavedFormDataRegister email emailConfirm fbUserId -> object
-      ["register" .= object ["email" .= email, "emailConfirm" .= emailConfirm, "fbUserId" .= fbUserId]]
-    FacebookLoginUnsavedFormDataSecurity email emailConfirm -> object
-      ["security" .= object ["email" .= email, "emailConfirm" .= emailConfirm]]
+    FacebookLoginUnsavedFormDataRegister email emailConfirm socialLogin -> object
+      ["register" .= object ["email" .= email, "emailConfirm" .= emailConfirm, "socialLogin" .= socialLogin]]
+    FacebookLoginUnsavedFormDataSecurity email emailConfirm socialLogin -> object
+      ["security" .= object ["email" .= email, "emailConfirm" .= emailConfirm, "socialLogin" .= socialLogin]]
 
 instance FromJSON FacebookLoginUnsavedFormData where
   parseJSON json = case json of
     Object o -> do
       let register = do
             o' <- o .: "register"
-            FacebookLoginUnsavedFormDataRegister <$> o' .: "email" <*> o' .: "emailConfirm" <*> o' .: "fbUserId"
+            FacebookLoginUnsavedFormDataRegister <$> o' .: "email" <*> o' .: "emailConfirm" <*> o' .: "socialLogin"
           security = do
             o' <- o .: "security"
-            FacebookLoginUnsavedFormDataSecurity <$> o' .: "email" <*> o' .: "emailConfirm"
+            FacebookLoginUnsavedFormDataSecurity <$> o' .: "email" <*> o' .: "emailConfirm" <*> o' .: "socialLogin"
       register <|> security
     _ -> fail
     where

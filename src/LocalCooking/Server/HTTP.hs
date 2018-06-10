@@ -26,7 +26,7 @@ module LocalCooking.Server.HTTP where
 import LocalCooking.Server.Assets (privacyPolicy)
 import LocalCooking.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (AuthTokenInitInSocialLogin), AuthTokenInitOut (..), AuthTokenFailure (..), PreliminaryAuthToken (..))
 import LocalCooking.Types (Env (..), showCacheBuster)
-import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB))
+import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB), SocialLoginForm (..))
 import LocalCooking.Function.Common (confirmEmail)
 import LocalCooking.Function.System (SystemM)
 -- import LocalCooking.Types (SystemM)
@@ -237,10 +237,14 @@ Disallow: /facebookLoginDeauthorize
                                   Nothing -> FacebookLoginUnsavedFormDataRegister
                                     { facebookLoginUnsavedFormDataRegisterEmail = ""
                                     , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
-                                    , facebookLoginUnsavedFormDataRegisterFBUserId = Just fbUserId
+                                    , facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
+                                      { socialLoginFormFb = Just fbUserId
+                                      }
                                     }
                                   Just formData -> formData
-                                    { facebookLoginUnsavedFormDataRegisterFBUserId = Just fbUserId
+                                    { facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
+                                      { socialLoginFormFb = Just fbUserId
+                                      }
                                     -- FIXME pack fbUserId as unsaved form data
                                     }
                                 )
