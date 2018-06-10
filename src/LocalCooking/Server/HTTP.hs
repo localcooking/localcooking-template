@@ -95,9 +95,6 @@ router
   Proxy
   handles
   = do
-  -- Env{envMkURI} <- lift getEnv
-  -- Env{envHostname,envTls} <- lift ask
-
   -- Turns a handled route's potential `?authToken=<preliminary>` into a FrontendEnv
   let handleAuthToken :: siteLinks
                       -> MiddlewareT SystemM
@@ -117,12 +114,6 @@ router
   handles handleAuthToken
   matchAny $ \_ _ resp -> do
     let redirectUri = envMkURI $ fromAbsDir [absdir|/|]
-          -- URI (Strict.Just $ if envTls then "https" else "http")
-          -- True
-          -- envHostname
-          -- []
-          -- []
-          -- Strict.Nothing
     resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
 
   match (l_ "robots" </> o_) $ action $ get $ text [here|User-agent: *
@@ -192,7 +183,9 @@ Disallow: /facebookLoginDeauthorize
                       pure $ Right (FacebookLoginCode code, state)
                 in  bad <|> good <|> denied of
 
-              Nothing -> pure (Left FBLoginReturnBadParse, Nothing)
+              Nothing -> do
+                log' $ "Couldn't parse facebook redirect query string: " <> T.pack (show qs)
+                pure (Left FBLoginReturnBadParse, Nothing)
               Just eX -> case eX of
                 Left e -> pure (Left e, Nothing)
                 -- Successfully fetched the fbCode and FacebookState from query string
