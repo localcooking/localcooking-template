@@ -172,7 +172,7 @@ Disallow: /facebookLoginDeauthorize
   match (l_ "facebookLoginReturn" </> o_) $ \_ req resp -> do
     let qs = queryString req
     ( eToken :: Either AuthTokenFailure AuthToken
-      , mFbState :: Maybe (FacebookLoginState siteLinks)
+      , mFbState :: Maybe FacebookLoginState
       ) <- case let bad = do
                       errorCode <- join $ lookup "error_code" qs
                       errorMessage <- join $ lookup "error_message" qs
@@ -186,7 +186,7 @@ Disallow: /facebookLoginDeauthorize
                         else Nothing
                     good = do
                       code <- fmap T.decodeUtf8 $ join $ lookup "code" qs
-                      (state :: FacebookLoginState siteLinks) <- do
+                      (state :: FacebookLoginState) <- do
                         x <- join $ lookup "state" qs
                         join $ Aeson.decode $ LBS.fromStrict x
                       pure $ Right (FacebookLoginCode code, state)
@@ -249,11 +249,11 @@ Disallow: /facebookLoginDeauthorize
                                     }
                                 )
                   _ ->
-                    let loc = toLocation facebookLoginStateOrigin
-                        -- Add `?authToken=<preliminary>` query param to redirect origin
-                        loc' = loc <&> ( "authToken"
-                                       , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
-                                       )
+                    let -- Add `?authToken=<preliminary>` query param to redirect origin
+                        loc' = facebookLoginStateOrigin
+                                 <&> ( "authToken"
+                                      , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
+                                      )
                     in  case facebookLoginStateFormData of
                           Just formData ->
                             loc' <&> ( "formData"

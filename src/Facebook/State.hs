@@ -24,7 +24,7 @@ import Data.Aeson.Types (typeMismatch)
 import Data.Aeson.Attoparsec (attoAeson)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
-import Path.Extended (ToLocation (toLocation), FromLocation (parseLocation), locationParser, printLocation)
+import Path.Extended (Location, locationParser, printLocation)
 
 
 
@@ -68,25 +68,23 @@ instance FromJSON FacebookLoginUnsavedFormData where
 
 
 -- | Complete @{state: ...}@ parameters passed to-and-from a facebook login redirection cycle
-data FacebookLoginState siteLinks = FacebookLoginState
-  { facebookLoginStateOrigin   :: siteLinks -- ^ Origin
+data FacebookLoginState = FacebookLoginState
+  { facebookLoginStateOrigin   :: Location -- ^ Origin
   , facebookLoginStateFormData :: Maybe FacebookLoginUnsavedFormData -- ^ Potentially unsaved form data
   }
 
-instance ToLocation siteLinks => ToJSON (FacebookLoginState siteLinks) where
+instance ToJSON FacebookLoginState where
   toJSON FacebookLoginState{..} = object
-    [ "origin" .= (String $ printLocation $ toLocation facebookLoginStateOrigin)
+    [ "origin" .= (String $ printLocation facebookLoginStateOrigin)
     , "formData" .= facebookLoginStateFormData
     ]
 
-instance FromLocation siteLinks => FromJSON (FacebookLoginState siteLinks) where
+instance FromJSON FacebookLoginState where
   parseJSON json = case json of
     Object o -> do
       json' <- o .: "origin"
       loc <- attoAeson locationParser json'
-      case parseLocation loc of
-        Left _ -> fail
-        Right x -> FacebookLoginState x <$> o .: "formData"
+      FacebookLoginState loc <$> o .: "formData"
     _ -> fail
     where
       fail = typeMismatch "FacebookLoginState" json
