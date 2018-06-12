@@ -28,23 +28,21 @@ import LocalCooking.Dependencies.AuthToken (authTokenServer, AuthTokenInitIn (Au
 import LocalCooking.Types (Env (..), showCacheBuster)
 import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB), SocialLoginForm (..))
 import LocalCooking.Function.Common (confirmEmail)
-import LocalCooking.Function.System (SystemM)
--- import LocalCooking.Types (SystemM)
--- import LocalCooking.Types.Env (Env (..), Development (..))
+import LocalCooking.Function.System (SystemM, SystemEnv (..), getSystemEnv)
+import LocalCooking.Function.System.Search (sphinxDocumentHTTPStream, mealTagsDocument, chefTagsDocument)
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
 import LocalCooking.Colors (LocalCookingColors)
--- import LocalCooking.Database.Query.User (removePendingEmail)
 import Facebook.Types (FacebookLoginCode (..))
 import Facebook.State (FacebookLoginState (..), FacebookLoginUnsavedFormData (..))
 
-import Web.Routes.Nested (RouterT, match, matchHere, matchAny, action, post, get, text, textOnly, l_, (</>), o_, route)
+import Web.Routes.Nested (RouterT, match, matchHere, matchAny, matchGroup, action, post, get, text, textOnly, l_, (</>), o_, route)
 import Web.Dependencies.Sparrow.Types (ServerContinue (ServerContinue, serverContinue), ServerReturn (ServerReturn, serverInitOut))
-import Network.Wai (strictRequestBody, queryString)
+import Network.Wai (strictRequestBody, queryString, responseStream)
 import Network.Wai.Middleware.ContentType (bytestring, FileExt (Other, JavaScript, Html))
 import Network.Wai.Trans (MiddlewareT)
-import Network.HTTP.Types (status302)
+import Network.HTTP.Types (status302, status200)
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
 import qualified Data.ByteString           as BS
@@ -192,10 +190,13 @@ Disallow: /facebookLoginDeauthorize
                 Right (code, state) -> do
                   -- NOTE ** Server Call Site
                   -- Manually invoke the AuthToken dependency's AuthTokenInitIn as Haskell code
+                  -- FIXME shouldn't always just log-in - need to distinguish storing the form data from using it
                   ( mCont :: Maybe (ServerContinue SystemM [] AuthTokenInitOut _ _) -- monomorphically typed to [], but unused
                     ) <- authTokenServer $ AuthTokenInitInSocialLogin $ SocialLoginFB code -- FIXME this should be pre-decoded
                   case mCont of
-                    Nothing -> pure (Left FBLoginReturnBadParse, Just state)
+                    Nothing -> do
+                      log' $ "Couldn't parse facebook redirect query string: " <> T.pack (show (code, state)) <> ", " <> T.pack (show qs)
+                      pure (Left FBLoginReturnBadParse, Just state)
                     Just ServerContinue{serverContinue} -> do
                       -- FIXME partial, could fail feasibly
                       ServerReturn{serverInitOut} <- serverContinue undefined
@@ -206,53 +207,49 @@ Disallow: /facebookLoginDeauthorize
                           pure (Left e, Just state)
 
     let redirectUri :: URI
-        redirectUri = envMkURI $
-          -- packLocation
-          --   (Strict.Just $ if envTls then "https" else "http")
-          --   True
-           {- envHostname $--} case mFbState of
-              -- Facebook rejected it
-              Nothing ->
-                let loc = toLocation (rootLink :: siteLinks)
+        redirectUri = envMkURI $ case mFbState of
+          -- Facebook rejected it
+          Nothing ->
+            let loc = toLocation (rootLink :: siteLinks)
+            in  loc <&> ( "authToken"
+                        , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
+                        )
+          Just FacebookLoginState{..} ->
+            case eToken of
+              -- Redirect to register page, populate with fbUserId form data
+              Left (FBLoginReturnNoUser fbUserId) ->
+                let loc = toLocation (registerLink :: siteLinks)
                 in  loc <&> ( "authToken"
                             , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
                             )
-              Just FacebookLoginState{..} ->
-                case eToken of
-                  -- Redirect to register page, populate with fbUserId form data
-                  Left (FBLoginReturnNoUser fbUserId) ->
-                    let loc = toLocation (registerLink :: siteLinks)
-                    in  loc <&> ( "authToken"
-                                , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
-                                )
-                            <&> ( "formData"
-                                , Just $ LBS8.toString $ Aeson.encode $ case facebookLoginStateFormData of
-                                  Nothing -> FacebookLoginUnsavedFormDataRegister
-                                    { facebookLoginUnsavedFormDataRegisterEmail = ""
-                                    , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
-                                    , facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
-                                      { socialLoginFormFb = Just fbUserId
-                                      }
-                                    }
-                                  Just formData -> formData
-                                    { facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
-                                      { socialLoginFormFb = Just fbUserId
-                                      }
-                                    -- FIXME pack fbUserId as unsaved form data
-                                    }
-                                )
-                  _ ->
-                    let -- Add `?authToken=<preliminary>` query param to redirect origin
-                        loc' = facebookLoginStateOrigin
-                                 <&> ( "authToken"
-                                      , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
-                                      )
-                    in  case facebookLoginStateFormData of
-                          Just formData ->
-                            loc' <&> ( "formData"
-                                     , Just $ LBS8.toString $ Aeson.encode formData
-                                     )
-                          Nothing -> loc'
+                        <&> ( "formData"
+                            , Just $ LBS8.toString $ Aeson.encode $ case facebookLoginStateFormData of
+                              Nothing -> FacebookLoginUnsavedFormDataRegister
+                                { facebookLoginUnsavedFormDataRegisterEmail = ""
+                                , facebookLoginUnsavedFormDataRegisterEmailConfirm = ""
+                                , facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
+                                  { socialLoginFormFb = Just fbUserId
+                                  }
+                                }
+                              Just formData -> formData
+                                { facebookLoginUnsavedFormDataRegisterSocialLogin = SocialLoginForm
+                                  { socialLoginFormFb = Just fbUserId
+                                  }
+                                -- FIXME pack fbUserId as unsaved form data
+                                }
+                            )
+              _ ->
+                let -- Add `?authToken=<preliminary>` query param to redirect origin
+                    loc' = facebookLoginStateOrigin
+                              <&> ( "authToken"
+                                  , Just $ LBS8.toString $ Aeson.encode $ PreliminaryAuthToken eToken
+                                  )
+                in  case facebookLoginStateFormData of
+                      Just formData ->
+                        loc' <&> ( "formData"
+                                  , Just $ LBS8.toString $ Aeson.encode formData
+                                  )
+                      Nothing -> loc'
 
     resp $ textOnly "" status302 [("Location", T.encodeUtf8 $ printURI redirectUri)]
 
@@ -261,6 +258,14 @@ Disallow: /facebookLoginDeauthorize
     body <- liftIO $ strictRequestBody req
     log' $ "Got deauthorized: " <> T.pack (show body)
     (action $ post $ \_ -> text "") app req resp
+
+  matchGroup (l_ "search" </> o_) $ do
+    SystemEnv{systemEnvDatabase} <- lift getSystemEnv -- FIXME restrict access to localhost
+    match (l_ "mealtags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream mealTagsDocument systemEnvDatabase
+    match (l_ "cheftags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream chefTagsDocument systemEnvDatabase
+
 
 
 

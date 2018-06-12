@@ -23,6 +23,7 @@ import Data.Aeson (ToJSON (..), FromJSON (..), object, (.=), (.:), Value (Object
 import Data.Aeson.Types (typeMismatch)
 import Data.Aeson.Attoparsec (attoAeson)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Control.Applicative ((<|>))
 import Path.Extended (Location, locationParser, printLocation)
 
@@ -42,7 +43,7 @@ data FacebookLoginUnsavedFormData
     { facebookLoginUnsavedFormDataSecurityEmail        :: Text
     , facebookLoginUnsavedFormDataSecurityEmailConfirm :: Text
     , facebookLoginUnsavedFormDataSecuritySocialLogin  :: SocialLoginForm
-    }
+    } deriving (Eq, Show)
 
 instance ToJSON FacebookLoginUnsavedFormData where
   toJSON x = case x of
@@ -71,7 +72,13 @@ instance FromJSON FacebookLoginUnsavedFormData where
 data FacebookLoginState = FacebookLoginState
   { facebookLoginStateOrigin   :: Location -- ^ Origin
   , facebookLoginStateFormData :: Maybe FacebookLoginUnsavedFormData -- ^ Potentially unsaved form data
-  }
+  } deriving (Eq)
+
+instance Show FacebookLoginState where
+  show (FacebookLoginState origin formData) =
+    "FacebookLoginState {facebookLoginStateOrigin = "
+      ++ T.unpack (printLocation origin) ++ ", facebookLoginStateFormData = "
+      ++ show formData ++ "}"
 
 instance ToJSON FacebookLoginState where
   toJSON FacebookLoginState{..} = object
