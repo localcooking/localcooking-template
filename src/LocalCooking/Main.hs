@@ -23,11 +23,8 @@ module LocalCooking.Main where
 
 import LocalCooking.Server (LocalCookingArgs, server)
 import LocalCooking.Types (Env (..), newDevelopment)
--- import LocalCooking.Types (SystemM, runSystemM)
--- import LocalCooking.Types.Env (Env (..), defManagers, defDevelopment, defTokenContexts, releaseEnv)
 import LocalCooking.Function.System (SystemEnv (..), execSystemM, SystemM, NewSystemEnvArgs (..), Keys (..))
 import LocalCooking.Links.Class (LocalCookingSiteLinks)
-import LocalCooking.Database.Query.Salt (getPasswordSalt)
 
 import Options.Applicative (Parser, execParser, info, helper, fullDesc, progDesc, header, strOption, option, switch, auto, long, help, value, showDefault)
 import qualified Data.Text as T
@@ -42,7 +39,6 @@ import qualified Data.ByteString.UTF8 as BS8
 import Data.Monoid ((<>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Strict.Maybe as Strict
--- import Data.Insert.Class (Insertable)
 import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative (Alternative)
 import Control.Monad (unless)
@@ -54,7 +50,7 @@ import Path (toFilePath, parent)
 import Path.Extended (ToLocation, FromLocation)
 import System.Directory (doesDirectoryExist, createDirectory)
 import System.Environment (getEnv)
-import Database.Persist.Sql (runSqlPool, runMigration)
+import Database.Persist.Sql (runSqlPool)
 import Database.Persist.Postgresql (createPostgresqlPool)
 
 
@@ -174,8 +170,6 @@ mkSystemEnv
     if argsImplProduction
       then pure Nothing
       else Just <$> newDevelopment
-
-  -- migrateAll systemEnvDatabase
 
   putStrLn $ unlines
     [ "Starting server with environment:"
