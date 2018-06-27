@@ -29,7 +29,8 @@ import LocalCooking.Types (Env (..), showCacheBuster)
 import LocalCooking.Semantics.Common (SocialLogin (SocialLoginFB), SocialLoginForm (..))
 import LocalCooking.Function.Common (confirmEmail)
 import LocalCooking.Function.System (SystemM, SystemEnv (..), getSystemEnv)
-import LocalCooking.Function.System.Search (sphinxDocumentHTTPStream, mealTagsDocument, chefTagsDocument)
+import LocalCooking.Function.System.Search
+  (sphinxDocumentHTTPStream, mealTagsDocument, chefTagsDocument, cultureTagsDocument, dietTagsDocument, farmTagsDocument, ingredientTagsDocument)
 import LocalCooking.Template (html)
 import LocalCooking.Links.Class (LocalCookingSiteLinks (rootLink, registerLink))
 import LocalCooking.Common.AccessToken.Auth (AuthToken)
@@ -261,10 +262,18 @@ Disallow: /facebookLoginDeauthorize
 
   matchGroup (l_ "search" </> o_) $ do
     SystemEnv{systemEnvDatabase} <- lift getSystemEnv -- FIXME restrict access to localhost
-    match (l_ "mealtags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
-      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream mealTagsDocument systemEnvDatabase
     match (l_ "cheftags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
       resp $ responseStream status200 [] $ sphinxDocumentHTTPStream chefTagsDocument systemEnvDatabase
+    match (l_ "culturetags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream cultureTagsDocument systemEnvDatabase
+    match (l_ "diettags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream dietTagsDocument systemEnvDatabase
+    match (l_ "farmtags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream farmTagsDocument systemEnvDatabase
+    match (l_ "ingredienttags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream ingredientTagsDocument systemEnvDatabase
+    match (l_ "mealtags" </> l_ "xmlpipe" </> o_) $ \_ _ resp ->
+      resp $ responseStream status200 [] $ sphinxDocumentHTTPStream mealTagsDocument systemEnvDatabase
 
 
 
