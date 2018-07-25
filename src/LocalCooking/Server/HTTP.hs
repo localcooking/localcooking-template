@@ -69,6 +69,7 @@ import Control.Monad.Trans (lift)
 import Control.Logging (log')
 import Control.Concurrent.STM (atomically, readTVar, writeTVar)
 import qualified Crypto.Saltine.Class as NaCl
+import Lucid.Html5 (div_, class_)
 
 
 
@@ -104,7 +105,10 @@ router
             formData = case join $ lookup "formData" $ queryString req of
               Nothing -> Nothing
               Just json -> Aeson.decode (LBS.fromStrict json)
-        in  (action $ get $ html env colors Nothing preliminary formData link "") app req resp
+            -- FIXME SEO Content
+            loader = div_ [class_ "loader"] "Loading..."
+            mid = action $ get $ html env colors Nothing preliminary formData link loader
+        in  mid app req resp
 
   -- main routes
   matchHere (handleAuthToken rootLink)
