@@ -188,6 +188,7 @@ body {
   border-radius: 50%;
 }
 .loader {
+  border-radius: 50%
   color: #ffffff;
   font-size: 11px;
   text-indent: -99999em;
@@ -208,7 +209,7 @@ body {
 .loader:before {
   width: 5.2em;
   height: 10.2em;
-  background: #0dc5c1;
+  background: #{localCookingColorsMain};
   border-radius: 10.2em 0 0 10.2em;
   top: -0.1em;
   left: -0.1em;
