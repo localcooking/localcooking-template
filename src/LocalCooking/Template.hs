@@ -182,11 +182,6 @@ body {
   padding-bottom: 5em;
 }|
 
-.loader,
-.loader:before,
-.loader:after {
-  border-radius: 50%;
-}
 .loader {
   border-radius: 50%;
   color: #ffffff;
@@ -207,26 +202,24 @@ body {
   content: '';
 }
 .loader:before {
-  width: 5.2em;
-  height: 10.2em;
+  width: 6em;
+  height: 12em;
   background: #{localCookingColorsMain};
-  border-radius: 10.2em 0 0 10.2em;
-  top: -0.1em;
-  left: -0.1em;
-  -webkit-transform-origin: 5.2em 5.1em;
-  transform-origin: 5.2em 5.1em;
+  top: -1em;
+  left: -1em;
+  -webkit-transform-origin: 6em 6em;
+  transform-origin: 6em 6em;
   -webkit-animation: load2 2s infinite ease 1.5s;
   animation: load2 2s infinite ease 1.5s;
 }
 .loader:after {
-  width: 5.2em;
-  height: 10.2em;
+  width: 6em;
+  height: 12em;
   background: #{localCookingColorsMain};
-  border-radius: 0 10.2em 10.2em 0;
-  top: -0.1em;
-  left: 5.1em;
-  -webkit-transform-origin: 0px 5.1em;
-  transform-origin: 0px 5.1em;
+  top: -1em;
+  left: 6em;
+  -webkit-transform-origin: 0px 6em;
+  transform-origin: 0px 6em;
   -webkit-animation: load2 2s infinite ease;
   animation: load2 2s infinite ease;
 }
