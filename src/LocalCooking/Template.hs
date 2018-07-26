@@ -180,7 +180,7 @@ a:visited:not([role="button"]) {
 body {
   background-color: #{localCookingColorsMain} !important;
   padding-bottom: 5em;
-}|
+}
 
 .loader {
   border-radius: 50%;
